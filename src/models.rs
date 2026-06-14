@@ -88,6 +88,7 @@ pub struct OpenResponse {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 pub struct FindRequest {
     pub url: String,
+    #[schemars(description = "Regex are allowed")]
     pub pattern: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub snippet_tokens: Option<usize>,

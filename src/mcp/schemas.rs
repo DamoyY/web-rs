@@ -9,8 +9,11 @@ use schemars::{JsonSchema, schema_for};
 pub fn tools() -> Result<Vec<Tool>> {
     Ok(vec![
         tool::<SearchQueryArguments>("search_query", "返回标题、日期、URL 与摘要。")?,
-        tool::<OpenArguments>("open", "用于读取页面内容。")?,
-        tool::<FindArguments>("find", "在页面中使用正则表达式查找匹配片段。")?,
+        tool::<OpenArguments>("open", "Open the page indicated by `url`.")?,
+        tool::<FindArguments>(
+            "find",
+            "Find the text `pattern` in the page indicated by `url`.",
+        )?,
     ])
 }
 #[inline]

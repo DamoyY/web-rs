@@ -7,6 +7,8 @@ use crate::{
 use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue};
 use serde::Serialize;
 use sonic_rs::{JsonContainerTrait as _, JsonValueTrait as _, Value};
+#[cfg(test)]
+mod tests;
 #[derive(Clone)]
 #[expect(
     clippy::module_name_repetitions,
@@ -120,8 +122,9 @@ fn extract_content(headers: &HeaderMap, body: &[u8]) -> Result<String> {
 }
 fn extract_payload_content(payload: &Value) -> Option<String> {
     if let Some(object) = payload.as_object() {
-        let data = object.get(&"data").unwrap_or(payload);
-        if let Some(content) = extract_payload_content(data) {
+        if let Some(data) = object.get(&"data")
+            && let Some(content) = extract_payload_content(data)
+        {
             return Some(content);
         }
         for key in ["content", "markdown", "text"] {

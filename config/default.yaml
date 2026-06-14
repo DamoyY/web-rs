@@ -1,8 +1,8 @@
 # Server identity exposed through MCP initialize responses.
 server:
   name: web # MCP server name.
-  instructions: 使用 Exa 搜索网页、使用 Jina 或代码托管原始文件读取页面，并在页面内容中执行正则查找。 # MCP instructions.
-  host: 127.0.0.1 # Bind address.
+  instructions: Browsing the Internet # MCP instructions.
+  host: 0.0.0.0 # Bind address.
   port: 18080 # Bind port.
   log_level: info # Trace log level.
   streamable_http_path: /mcp # MCP HTTP endpoint.
@@ -10,10 +10,7 @@ server:
   protocol_version: "2025-06-18" # MCP protocol version.
   stateful_http: false # RMCP Streamable HTTP session mode.
   json_response: true # Return JSON directly instead of SSE for stateless requests.
-  allowed_hosts: # Host header allow-list used by RMCP DNS-rebinding defense.
-    - localhost
-    - 127.0.0.1
-    - "::1"
+  allowed_hosts: [] # Host header allow-list; empty accepts every Host header.
   allowed_origins: [] # Optional browser Origin allow-list; empty disables Origin checks.
 
 # Header names expected from MCP HTTP clients.
