@@ -1,8 +1,9 @@
 use crate::{
     Result,
-    config::ChunkingConfig,
+    config::{ChunkingConfig, FindConfig},
+    error::AppError,
     models::OpenPage,
-    page::{PageContent, TokenChunker, fetcher::PageSource, open_page_chunk},
+    page::{PageContent, TokenChunker, fetcher::PageSource, find_in_page, open_page_chunk},
 };
 #[test]
 #[expect(
@@ -48,6 +49,43 @@ fn open_out_of_range_chunk_uses_first_chunk() -> Result<()> {
     assert_eq!(
         warnings,
         ["\"requests[0].chunk\" must be between 1 and 1; using 1"]
+    );
+    Ok(())
+}
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The test uses assertions while Result keeps setup failures readable."
+)]
+fn find_supports_fancy_regex_lookahead() -> Result<()> {
+    let chunker = TokenChunker::new(&ChunkingConfig {
+        tokenizer: "o200k_base".to_owned(),
+        chunk_tokens: 100,
+        overlap_ratio: 0.1_f64,
+    })?;
+    let page = PageContent {
+        url: "https://example.com".to_owned(),
+        source: PageSource::Direct,
+        markdown: "so fancy! even with! iterators!".to_owned(),
+    };
+    let regex = fancy_regex::Regex::new(r"\w+(?=!)")
+        .map_err(|error| AppError::client(error.to_string()))?;
+    let found = find_in_page(
+        &page,
+        &regex,
+        10,
+        &chunker,
+        &FindConfig {
+            default_snippet_tokens: 10,
+            max_matches_per_page: 10,
+        },
+    )?;
+    assert_eq!(found.matches.len(), 3);
+    assert!(
+        found
+            .matches
+            .first()
+            .is_some_and(|found_match| found_match.snippet.contains("fancy"))
     );
     Ok(())
 }

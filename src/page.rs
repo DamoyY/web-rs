@@ -24,7 +24,7 @@ pub type TokenChunker = chunking::TokenChunker;
 #[inline]
 pub fn find_in_page(
     page: &PageContent,
-    regex: &regex::Regex,
+    regex: &fancy_regex::Regex,
     snippet_tokens: usize,
     chunker: &TokenChunker,
     config: &crate::config::FindConfig,

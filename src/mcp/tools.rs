@@ -8,8 +8,8 @@ use crate::{
     search::ExaSearchClient,
 };
 use axum::http::HeaderMap;
+use fancy_regex::Regex;
 use futures::future::try_join_all;
-use regex::Regex;
 use sonic_rs::Value;
 #[derive(Clone)]
 pub struct ToolService {
