@@ -1,4 +1,9 @@
-use crate::{Result, error::AppError, net::SsrfGuard};
+use crate::{
+    Result,
+    error::AppError,
+    net::{SsrfGuard, resolver::GuardedResolver},
+};
+use alloc::sync::Arc;
 use core::time::Duration;
 use reqwest::{
     Method, StatusCode, Url,
@@ -26,9 +31,10 @@ impl SecureHttpClient {
     #[must_use]
     pub fn new(max_redirects: usize, guard: SsrfGuard) -> Self {
         let client = reqwest::Client::builder()
+            .dns_resolver(Arc::new(GuardedResolver::new(guard.clone())))
             .redirect(Policy::none())
             .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
+            .unwrap_or_else(|error| panic!("failed to build guarded HTTP client: {error}"));
         Self {
             client,
             guard,

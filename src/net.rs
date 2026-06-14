@@ -1,4 +1,5 @@
 pub mod client;
+pub(crate) mod resolver;
 pub mod ssrf;
 #[cfg(test)]
 mod tests;

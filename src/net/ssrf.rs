@@ -1,5 +1,5 @@
 use crate::{Result, config::SsrfConfig, error::AppError};
-use core::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use core::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use tokio::net::lookup_host;
 use url::{Host, Url};
 #[derive(Clone, Debug)]
@@ -47,19 +47,9 @@ impl SsrfGuard {
         if !self.config.block_private_networks {
             return Ok(());
         }
-        let resolved_port = port.unwrap_or(443);
-        let addresses = lookup_host((normalized.as_str(), resolved_port))
+        self.resolve_allowed_domain(&normalized, port.unwrap_or(443))
             .await
-            .map_err(|_error| AppError::client("URL host could not be resolved."))?;
-        let mut resolved_any = false;
-        for socket in addresses {
-            resolved_any = true;
-            self.validate_ip(socket.ip())?;
-        }
-        if resolved_any {
-            return Ok(());
-        }
-        Err(AppError::client("URL host did not resolve to any address."))
+            .map(|_addresses| ())
     }
     fn validate_ip(&self, address: IpAddr) -> Result<()> {
         if !self.config.block_private_networks || is_public_ip(address) {
@@ -68,6 +58,34 @@ impl SsrfGuard {
         Err(AppError::client(
             "URL resolves to a blocked network address.",
         ))
+    }
+    pub(crate) async fn resolve_allowed_domain(
+        &self,
+        domain: &str,
+        port: u16,
+    ) -> Result<Vec<SocketAddr>> {
+        let normalized = domain.trim_end_matches('.').to_ascii_lowercase();
+        if self.config.block_local_hostnames && is_local_hostname(&normalized) {
+            return Err(AppError::client("URL host is blocked by SSRF protection."));
+        }
+        let addresses = lookup_host((normalized.as_str(), port))
+            .await
+            .map_err(|_error| AppError::client("URL host could not be resolved."))?;
+        self.validate_resolved_addresses(addresses)
+    }
+    pub(crate) fn validate_resolved_addresses<I>(&self, addresses: I) -> Result<Vec<SocketAddr>>
+    where
+        I: IntoIterator<Item = SocketAddr>,
+    {
+        let mut allowed = Vec::new();
+        for socket in addresses {
+            self.validate_ip(socket.ip())?;
+            allowed.push(socket);
+        }
+        if allowed.is_empty() {
+            return Err(AppError::client("URL host did not resolve to any address."));
+        }
+        Ok(allowed)
     }
 }
 #[inline]
