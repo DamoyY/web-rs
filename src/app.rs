@@ -6,15 +6,9 @@
 use crate::{
     Result,
     config::AppConfig,
-    mcp::{
-        handler::{health, mcp_entrypoint},
-        state,
-    },
+    mcp::{handler::health, http_service},
 };
-use axum::{
-    Router,
-    routing::{get, post},
-};
+use axum::{Router, routing::get};
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tracing::info;
@@ -27,9 +21,9 @@ pub async fn run(config: AppConfig) -> anyhow::Result<()> {
     Ok(())
 }
 pub fn router(config: AppConfig) -> Result<Router> {
-    let state = state(config.clone())?;
+    let service = http_service(&config)?;
     Ok(Router::new()
         .route(&config.server.health_path, get(health))
-        .route(&config.server.streamable_http_path, post(mcp_entrypoint))
-        .with_state(state))
+        .nest_service(&config.server.streamable_http_path, service)
+        .with_state(config))
 }

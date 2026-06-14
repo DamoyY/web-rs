@@ -17,6 +17,10 @@ pub struct ServerConfig {
     pub streamable_http_path: String,
     pub health_path: String,
     pub protocol_version: String,
+    pub stateful_http: bool,
+    pub json_response: bool,
+    pub allowed_hosts: Vec<String>,
+    pub allowed_origins: Vec<String>,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]

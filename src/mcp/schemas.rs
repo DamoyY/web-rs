@@ -8,45 +8,32 @@ use crate::{
     error::AppError,
     models::{FindArguments, OpenArguments, SearchQueryArguments},
 };
+use rmcp::model::{JsonObject, Tool};
 use schemars::{JsonSchema, schema_for};
-use serde::Serialize;
-use sonic_rs::Value;
-#[derive(Serialize)]
-pub struct ToolList {
-    pub tools: Vec<ToolDescription>,
+pub fn tools() -> Result<Vec<Tool>> {
+    Ok(vec![
+        tool::<SearchQueryArguments>("search_query", "返回标题、日期、URL 与摘要。")?,
+        tool::<OpenArguments>("open", "用于读取页面内容。")?,
+        tool::<FindArguments>("find", "在页面中使用正则表达式查找匹配片段。")?,
+    ])
 }
-#[derive(Serialize)]
-pub struct ToolDescription {
-    pub name: &'static str,
-    pub description: &'static str,
-    #[serde(rename = "inputSchema")]
-    pub input_schema: Value,
+pub fn tool_by_name(name: &str) -> Result<Option<Tool>> {
+    Ok(tools()?.into_iter().find(|tool| tool.name == name))
 }
-pub fn tool_list() -> Result<ToolList> {
-    Ok(ToolList {
-        tools: vec![
-            ToolDescription {
-                name: "search_query",
-                description: "返回标题、日期、URL 与摘要。",
-                input_schema: schema_value::<SearchQueryArguments>()?,
-            },
-            ToolDescription {
-                name: "open",
-                description: "用于读取页面内容。",
-                input_schema: schema_value::<OpenArguments>()?,
-            },
-            ToolDescription {
-                name: "find",
-                description: "在页面中使用正则表达式查找匹配片段。",
-                input_schema: schema_value::<FindArguments>()?,
-            },
-        ],
-    })
-}
-fn schema_value<T>() -> Result<Value>
+fn tool<T>(name: &'static str, description: &'static str) -> Result<Tool>
 where
     T: JsonSchema,
 {
-    sonic_rs::to_value(&schema_for!(T))
-        .map_err(|error| AppError::internal(format!("failed to build tool schema: {error}")))
+    Ok(Tool::new(name, description, schema_object::<T>()?))
+}
+fn schema_object<T>() -> Result<JsonObject>
+where
+    T: JsonSchema,
+{
+    let value = rmcp::serde_json::to_value(schema_for!(T))
+        .map_err(|error| AppError::internal(format!("failed to build tool schema: {error}")))?;
+    match value {
+        rmcp::serde_json::Value::Object(object) => Ok(object),
+        _ => Err(AppError::internal("tool schema is not a JSON object")),
+    }
 }

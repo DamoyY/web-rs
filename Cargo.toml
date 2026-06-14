@@ -13,6 +13,7 @@ mimalloc = { version = "*", features = ["v3"] }
 percent-encoding = "*"
 regex = "*"
 reqwest = { version = "*", default-features = false, features = ["deflate", "gzip", "json", "rustls-tls"] }
+rmcp = { version = "*", features = ["macros", "schemars", "server", "transport-streamable-http-server"] }
 schemars = { version = "*", features = ["derive"] }
 serde = { version = "*", features = ["derive"] }
 serde-saphyr = "*"

@@ -32,6 +32,10 @@ impl ToolService {
             config,
         })
     }
+    #[must_use]
+    pub(crate) const fn config(&self) -> &AppConfig {
+        &self.config
+    }
     pub async fn call(
         &self,
         name: &str,

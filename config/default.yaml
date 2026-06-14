@@ -8,6 +8,13 @@ server:
   streamable_http_path: /mcp # MCP HTTP endpoint.
   health_path: /health # Health-check endpoint.
   protocol_version: "2025-06-18" # MCP protocol version.
+  stateful_http: false # RMCP Streamable HTTP session mode.
+  json_response: true # Return JSON directly instead of SSE for stateless requests.
+  allowed_hosts: # Host header allow-list used by RMCP DNS-rebinding defense.
+    - localhost
+    - 127.0.0.1
+    - "::1"
+  allowed_origins: [] # Optional browser Origin allow-list; empty disables Origin checks.
 
 # Header names expected from MCP HTTP clients.
 headers:
