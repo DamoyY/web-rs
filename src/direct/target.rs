@@ -7,6 +7,7 @@ pub enum ResponseFormat {
     Text,
     MediaWikiApi,
     PackageRegistryJson,
+    StackOverflowQuestionJson,
 }
 #[derive(Clone, Debug)]
 #[expect(
@@ -61,6 +62,13 @@ impl DirectFetchTarget {
     pub fn mediawiki(original_url: &str, request_url: String) -> Self {
         let mut target = Self::text(original_url, request_url);
         target.response_format = ResponseFormat::MediaWikiApi;
+        target
+    }
+    #[inline]
+    #[must_use]
+    pub fn stack_overflow_question(original_url: &str, request_url: String) -> Self {
+        let mut target = Self::text(original_url, request_url);
+        target.response_format = ResponseFormat::StackOverflowQuestionJson;
         target
     }
 }

@@ -4,6 +4,7 @@ use crate::{
     direct::{
         mediawiki::extract_mediawiki_content,
         package::format_package_registry_json,
+        stack_overflow::format_stack_overflow_question_json,
         target::{DirectFetchTarget, ResponseFormat},
     },
     error::{AppError, http_service_error},
@@ -86,21 +87,27 @@ fn extract_content(
     ensure_required_content_type(target, headers)?;
     match target.response_format {
         ResponseFormat::Text => Ok(String::from_utf8_lossy(body).into_owned()),
-        ResponseFormat::MediaWikiApi | ResponseFormat::PackageRegistryJson => {
-            let payload: Value = sonic_rs::from_slice(body).map_err(|_error| {
-                let service = if target.response_format == ResponseFormat::MediaWikiApi {
-                    "MediaWiki API"
-                } else {
-                    "Package registry"
-                };
-                AppError::client(format!("{service} returned malformed JSON."))
-            })?;
-            if target.response_format == ResponseFormat::MediaWikiApi {
-                return extract_mediawiki_content(&payload);
-            }
+        ResponseFormat::MediaWikiApi => {
+            let payload = json_payload(body, target.response_format)?;
+            extract_mediawiki_content(&payload)
+        }
+        ResponseFormat::PackageRegistryJson => {
+            let payload = json_payload(body, target.response_format)?;
             format_package_registry_json(&payload, &target.json_fields_last)
         }
+        ResponseFormat::StackOverflowQuestionJson => {
+            let payload = json_payload(body, target.response_format)?;
+            format_stack_overflow_question_json(&payload)
+        }
     }
+}
+fn json_payload(body: &[u8], format: ResponseFormat) -> Result<Value> {
+    sonic_rs::from_slice(body).map_err(|_error| {
+        AppError::client(format!(
+            "{} returned malformed JSON.",
+            json_service_name(format)
+        ))
+    })
 }
 async fn reject_if_probe_is_similar(
     client: &SecureHttpClient,
@@ -174,11 +181,21 @@ fn accept_header(target: &DirectFetchTarget) -> String {
     }
     if matches!(
         target.response_format,
-        ResponseFormat::MediaWikiApi | ResponseFormat::PackageRegistryJson
+        ResponseFormat::MediaWikiApi
+            | ResponseFormat::PackageRegistryJson
+            | ResponseFormat::StackOverflowQuestionJson
     ) {
         return "application/json".to_owned();
     }
     "text/plain,*/*".to_owned()
+}
+const fn json_service_name(format: ResponseFormat) -> &'static str {
+    match format {
+        ResponseFormat::MediaWikiApi => "MediaWiki API",
+        ResponseFormat::PackageRegistryJson => "Package registry",
+        ResponseFormat::StackOverflowQuestionJson => "Stack Exchange API",
+        ResponseFormat::Text => "direct fetch",
+    }
 }
 #[expect(
     clippy::needless_pass_by_value,

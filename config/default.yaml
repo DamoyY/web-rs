@@ -22,7 +22,7 @@ headers:
 search:
   endpoint: https://api.exa.ai/search # Exa search endpoint.
   num_results: 15 # Results per request.
-  type: deep-lite # Exa search type.
+  type: deep # Exa search type.
   highlights_max_characters: 1000 # Highlight character budget.
   max_age_hours: 9007199254740991 # Cache age policy sent to Exa.
   livecrawl_timeout: 30000 # Exa livecrawl timeout in milliseconds.

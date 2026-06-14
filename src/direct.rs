@@ -2,6 +2,7 @@ pub mod code_hosts;
 pub mod fetch;
 pub mod mediawiki;
 pub mod package;
+pub mod stack_overflow;
 pub mod target;
 #[cfg(test)]
 mod tests;
@@ -28,6 +29,9 @@ pub fn resolve_direct_fetch_target(
     }
     if let Some(raw_url) = code_hosts::resolve_code_host_raw_url(&parsed, &host, config) {
         return Some(DirectFetchTarget::text(url, raw_url));
+    }
+    if let Some(api_url) = stack_overflow::resolve_stack_overflow_api_url(&parsed) {
+        return Some(DirectFetchTarget::stack_overflow_question(url, api_url));
     }
     if let Some(registry) = package::resolve_package_registry_target(&parsed) {
         return Some(DirectFetchTarget::package(

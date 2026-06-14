@@ -1,6 +1,9 @@
 use crate::{
     Result, config,
-    direct::{ResponseFormat, resolve_direct_fetch_target},
+    direct::{
+        ResponseFormat, resolve_direct_fetch_target,
+        stack_overflow::format_stack_overflow_question_json,
+    },
 };
 #[test]
 #[expect(
@@ -38,5 +41,63 @@ fn scoped_npm_package_uses_registry_json() -> Result<()> {
         "https://registry.npmjs.org/@types%2Fnode"
     );
     assert_eq!(target.json_fields_last, ["versions"]);
+    Ok(())
+}
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The test uses assertions while Result keeps setup failures readable."
+)]
+fn stack_overflow_question_resolves_to_api_json() -> Result<()> {
+    let config = config::load_embedded()?;
+    let target = resolve_direct_fetch_target(
+        "https://stackoverflow.com/questions/11828270/how-do-i-exit-vim",
+        &config.direct_fetch,
+    )
+    .ok_or_else(|| crate::error::AppError::internal("Stack Overflow target was not resolved"))?;
+    assert_eq!(
+        target.request_url,
+        "https://api.stackexchange.com/2.3/questions/11828270?order=desc&sort=votes&site=stackoverflow&page=1&pagesize=100&filter=W-vZ8WEHVi3D2JhQe1m8l90EjOxo6eCsb6b_6yfX0_p"
+    );
+    assert_eq!(
+        target.response_format,
+        ResponseFormat::StackOverflowQuestionJson
+    );
+    Ok(())
+}
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The test uses assertions while Result keeps setup failures readable."
+)]
+fn stack_overflow_json_starts_with_question_then_answers_without_comments() -> Result<()> {
+    let payload = sonic_rs::from_str(
+        r#"{
+            "items": [
+                {
+                    "question_id": 1,
+                    "title": "How?",
+                    "comment_count": 7,
+                    "comments": [{"comment_id": 9}],
+                    "answers": [
+                        {
+                            "answer_id": 2,
+                            "is_accepted": true,
+                            "comment_count": 3,
+                            "comments": [{"comment_id": 4}],
+                            "body_markdown": "Answer"
+                        }
+                    ],
+                    "body_markdown": "Question"
+                }
+            ],
+            "has_more": false
+        }"#,
+    )
+    .map_err(|error| crate::error::AppError::internal(error.to_string()))?;
+    let formatted = format_stack_overflow_question_json(&payload)?;
+    assert!(formatted.starts_with("{\n  \"question\""));
+    assert!(formatted.contains("\"answers\""));
+    assert!(!formatted.contains("comment"));
     Ok(())
 }
