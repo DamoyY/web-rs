@@ -1,17 +1,16 @@
-#![expect(
-    clippy::pedantic,
-    clippy::restriction,
-    reason = "Axum entrypoint code follows framework naming and ownership conventions."
-)]
 use crate::{
     Result,
     config::AppConfig,
     mcp::{handler::health, http_service},
 };
 use axum::{Router, routing::get};
-use std::net::SocketAddr;
+use core::net::SocketAddr;
 use tokio::net::TcpListener;
 use tracing::info;
+#[expect(
+    clippy::missing_inline_in_public_items,
+    reason = "The async server entrypoint performs network setup and is not an inline candidate."
+)]
 pub async fn run(config: AppConfig) -> anyhow::Result<()> {
     let address = SocketAddr::new(config.server.host.parse()?, config.server.port);
     let router = router(config.clone()).map_err(anyhow::Error::from)?;
@@ -20,6 +19,7 @@ pub async fn run(config: AppConfig) -> anyhow::Result<()> {
     axum::serve(listener, router).await?;
     Ok(())
 }
+#[inline]
 pub fn router(config: AppConfig) -> Result<Router> {
     let service = http_service(&config)?;
     Ok(Router::new()

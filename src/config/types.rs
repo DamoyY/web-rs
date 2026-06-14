@@ -1,8 +1,3 @@
-#![expect(
-    clippy::pedantic,
-    clippy::restriction,
-    reason = "Config structs intentionally mirror embedded YAML keys."
-)]
 use crate::{Result, error::AppError};
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -110,26 +105,27 @@ pub struct AppConfig {
     pub ssrf: SsrfConfig,
 }
 impl AppConfig {
+    #[inline]
     pub fn validate(&self) -> Result<()> {
-        positive(self.search.num_results, "search.num_results")?;
+        positive(&self.search.num_results, "search.num_results")?;
         positive(
-            self.search.highlights_max_characters,
+            &self.search.highlights_max_characters,
             "search.highlights_max_characters",
         )?;
-        positive(self.search.livecrawl_timeout, "search.livecrawl_timeout")?;
-        positive(self.chunking.chunk_tokens, "chunking.chunk_tokens")?;
+        positive(&self.search.livecrawl_timeout, "search.livecrawl_timeout")?;
+        positive(&self.chunking.chunk_tokens, "chunking.chunk_tokens")?;
         positive(
-            self.find.default_snippet_tokens,
+            &self.find.default_snippet_tokens,
             "find.default_snippet_tokens",
         )?;
-        positive(self.find.max_matches_per_page, "find.max_matches_per_page")?;
-        positive(self.direct_fetch.max_bytes, "direct_fetch.max_bytes")?;
+        positive(&self.find.max_matches_per_page, "find.max_matches_per_page")?;
+        positive(&self.direct_fetch.max_bytes, "direct_fetch.max_bytes")?;
         positive_float(self.http.timeout_seconds, "http.timeout_seconds")?;
         positive_float(
             self.http.direct_fetch_timeout_seconds,
             "http.direct_fetch_timeout_seconds",
         )?;
-        if !(0.0..1.0).contains(&self.chunking.overlap_ratio) {
+        if !(0.0_f64..1.0_f64).contains(&self.chunking.overlap_ratio) {
             return Err(AppError::config(
                 "chunking.overlap_ratio must be >= 0 and < 1",
             ));
@@ -139,17 +135,17 @@ impl AppConfig {
         Ok(())
     }
 }
-fn positive<T>(value: T, path: &str) -> Result<()>
+fn positive<T>(value: &T, path: &str) -> Result<()>
 where
     T: PartialOrd + From<u8>,
 {
-    if value > T::from(0) {
+    if value > &T::from(0_u8) {
         return Ok(());
     }
     Err(AppError::config(format!("{path} must be positive")))
 }
 fn positive_float(value: f64, path: &str) -> Result<()> {
-    if value.is_finite() && value > 0.0 {
+    if value.is_finite() && value > 0.0_f64 {
         return Ok(());
     }
     Err(AppError::config(format!("{path} must be positive")))

@@ -1,8 +1,3 @@
-#![expect(
-    clippy::pedantic,
-    clippy::restriction,
-    reason = "Direct fetch validation keeps explicit protocol error handling."
-)]
 use crate::{
     Result, VERSION,
     config::{DirectFetchConfig, HttpConfig},
@@ -17,6 +12,11 @@ use crate::{
 use reqwest::header::{ACCEPT, CONTENT_TYPE, HeaderMap, HeaderValue, RANGE, USER_AGENT};
 use sonic_rs::Value;
 const SIMILAR_CONTENT_THRESHOLD: f64 = 0.9;
+#[expect(
+    clippy::missing_inline_in_public_items,
+    clippy::module_name_repetitions,
+    reason = "The public direct fetch entrypoint performs HTTP I/O and keeps protocol terminology."
+)]
 pub async fn fetch_direct_text(
     client: &SecureHttpClient,
     target: &DirectFetchTarget,
@@ -87,7 +87,7 @@ fn extract_content(
     match target.response_format {
         ResponseFormat::Text => Ok(String::from_utf8_lossy(body).into_owned()),
         ResponseFormat::MediaWikiApi | ResponseFormat::PackageRegistryJson => {
-            let payload: Value = sonic_rs::from_slice(body).map_err(|_| {
+            let payload: Value = sonic_rs::from_slice(body).map_err(|_error| {
                 let service = if target.response_format == ResponseFormat::MediaWikiApi {
                     "MediaWiki API"
                 } else {
@@ -120,7 +120,13 @@ async fn reject_if_probe_is_similar(
         return Ok(());
     }
     let mut probe_target = target.clone();
-    probe_target.request_url = probe_url.to_owned();
+    #[expect(
+        clippy::assigning_clones,
+        reason = "The cloned probe URL replaces a cloned request target for one validation request."
+    )]
+    {
+        probe_target.request_url = probe_url.to_owned();
+    }
     probe_target.similarity_probe_url = None;
     let probe_content = extract_content(
         &probe_target,
@@ -174,6 +180,10 @@ fn accept_header(target: &DirectFetchTarget) -> String {
     }
     "text/plain,*/*".to_owned()
 }
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "map_err passes InvalidHeaderValue by value and the formatter consumes only its Display output."
+)]
 fn header_error(error: reqwest::header::InvalidHeaderValue) -> AppError {
     AppError::internal(format!("invalid configured HTTP header: {error}"))
 }

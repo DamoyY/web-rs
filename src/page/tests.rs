@@ -5,13 +5,17 @@ use crate::{
     page::{PageContent, TokenChunker, fetcher::PageSource, open_page_chunk},
 };
 #[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The test uses assertions while Result keeps setup failures readable."
+)]
 fn chunker_splits_with_overlap_and_limits_snippet() -> Result<()> {
     let chunker = TokenChunker::new(&ChunkingConfig {
         tokenizer: "o200k_base".to_owned(),
         chunk_tokens: 10,
-        overlap_ratio: 0.2,
+        overlap_ratio: 0.2_f64,
     })?;
-    let text = (0..40)
+    let text = (0_usize..40_usize)
         .map(|index| format!("word{index}"))
         .collect::<Vec<_>>()
         .join(" ");
@@ -23,11 +27,15 @@ fn chunker_splits_with_overlap_and_limits_snippet() -> Result<()> {
     Ok(())
 }
 #[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The test uses assertions while Result keeps setup failures readable."
+)]
 fn open_out_of_range_chunk_uses_first_chunk() -> Result<()> {
     let chunker = TokenChunker::new(&ChunkingConfig {
         tokenizer: "o200k_base".to_owned(),
         chunk_tokens: 100,
-        overlap_ratio: 0.1,
+        overlap_ratio: 0.1_f64,
     })?;
     let page = PageContent {
         url: "https://example.com".to_owned(),

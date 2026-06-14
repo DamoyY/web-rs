@@ -1,4 +1,4 @@
-use sonic_rs::{JsonValueTrait, Object, Value};
+use sonic_rs::{JsonValueTrait as _, Object, Value};
 #[must_use]
 pub(crate) fn parse_json_container(value: Value) -> Value {
     let Some(text) = value.as_str() else {

@@ -1,16 +1,16 @@
-#![expect(
-    clippy::pedantic,
-    clippy::restriction,
-    reason = "Package registry URL rules require exact path segment handling."
-)]
 use percent_encoding::percent_decode_str;
-use sonic_rs::JsonContainerTrait;
+use sonic_rs::JsonContainerTrait as _;
 use url::Url;
 #[derive(Debug)]
+#[expect(
+    clippy::module_name_repetitions,
+    reason = "The target type name mirrors the package registry protocol branch."
+)]
 pub struct PackageRegistryTarget {
     pub request_url: String,
     pub json_fields_last: Vec<String>,
 }
+#[inline]
 #[must_use]
 pub fn resolve_package_registry_target(parsed: &Url) -> Option<PackageRegistryTarget> {
     let host = parsed.host_str()?.to_ascii_lowercase();
@@ -41,6 +41,7 @@ pub fn resolve_package_registry_target(parsed: &Url) -> Option<PackageRegistryTa
     }
     None
 }
+#[inline]
 pub fn format_package_registry_json(
     payload: &sonic_rs::Value,
     fields_last: &[String],
@@ -66,44 +67,62 @@ pub fn format_package_registry_json(
     })
 }
 fn pypi_name(parts: &[String]) -> Option<String> {
-    if parts.len() >= 2 && parts[0] == "project" {
-        return unquoted_segment(&parts[1]);
+    let (section, rest) = parts.split_first()?;
+    if section == "project" {
+        let name = rest.first()?;
+        return unquoted_segment(name);
     }
-    if parts.len() == 3 && parts[0] == "pypi" && parts[2] == "json" {
-        return unquoted_segment(&parts[1]);
+    if section == "pypi" && rest.len() == 2 && rest.get(1).is_some_and(|suffix| suffix == "json") {
+        let name = rest.first()?;
+        return unquoted_segment(name);
     }
     None
 }
 fn npm_name(host: &str, parts: &[String]) -> Option<String> {
     let package_parts = if matches!(host, "npmjs.com" | "www.npmjs.com") {
-        (parts.first()? == "package").then_some(&parts[1..])?
+        let (section, package_parts) = parts.split_first()?;
+        if section != "package" || package_parts.is_empty() {
+            return None;
+        }
+        package_parts
     } else {
         parts
     };
     let decoded: Vec<String> = package_parts.iter().map(|part| decode(part)).collect();
     let name_parts: Vec<String> = if decoded.len() == 1 {
-        decoded[0].split('/').map(str::to_owned).collect()
+        let single = decoded.first()?;
+        single.split('/').map(str::to_owned).collect()
     } else {
         decoded
     };
-    if name_parts.len() == 1 && is_segment(&name_parts[0]) {
-        return Some(name_parts[0].clone());
+    if name_parts.len() == 1 {
+        let name = name_parts.first()?;
+        return is_segment(name).then(|| name.clone());
     }
-    if name_parts.len() == 2
-        && name_parts[0].starts_with('@')
-        && is_segment(&name_parts[0][1..])
-        && is_segment(&name_parts[1])
-    {
-        return Some(name_parts.join("/"));
+    if name_parts.len() == 2 {
+        let mut parts_iter = name_parts.iter();
+        let scope = parts_iter.next()?;
+        let name = parts_iter.next()?;
+        let scope_name = scope.strip_prefix('@')?;
+        return (is_segment(scope_name) && is_segment(name)).then(|| name_parts.join("/"));
     }
     None
 }
 fn crates_name(parts: &[String]) -> Option<String> {
-    if parts.len() >= 2 && parts[0] == "crates" {
-        return unquoted_segment(&parts[1]);
+    let (section, rest) = parts.split_first()?;
+    if section == "crates" {
+        let name = rest.first()?;
+        return unquoted_segment(name);
     }
-    if parts.len() == 4 && parts[..3] == ["api", "v1", "crates"] {
-        return unquoted_segment(&parts[3]);
+    if parts.len() == 4 {
+        let mut parts_iter = parts.iter();
+        let api = parts_iter.next()?;
+        let version = parts_iter.next()?;
+        let crates = parts_iter.next()?;
+        let name = parts_iter.next()?;
+        if api == "api" && version == "v1" && crates == "crates" {
+            return unquoted_segment(name);
+        }
     }
     None
 }

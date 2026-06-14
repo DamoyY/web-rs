@@ -4,8 +4,12 @@ use crate::{
 };
 use sonic_rs::json;
 #[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The test uses assertions while Result keeps setup failures readable."
+)]
 fn open_accepts_direct_object_with_aliases() -> Result<()> {
-    let result = open_arguments(Some(json ! ({ "URL" : "example.com" , "CHUNKS" : 1 })))?;
+    let result = open_arguments(Some(json ! ({ "URL" : "example.com" , "CHUNKS" : 1_u64 })))?;
     let request = result
         .value
         .requests
@@ -20,6 +24,10 @@ fn open_accepts_direct_object_with_aliases() -> Result<()> {
     Ok(())
 }
 #[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The test uses assertions while Result keeps setup failures readable."
+)]
 fn search_wraps_domains_and_normalizes_category() -> Result<()> {
     let result = search_arguments(Some(
         json ! ({ "Request" : { "Query" : "OpenAI" , "Domain" : "openai.com" , "Category" : "Research Papers" } }),

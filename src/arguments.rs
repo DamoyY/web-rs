@@ -1,8 +1,3 @@
-#![expect(
-    clippy::pedantic,
-    clippy::restriction,
-    reason = "Public argument helpers keep MCP tool names explicit."
-)]
 pub mod aliases;
 pub mod normalizer;
 pub(crate) mod support;
@@ -20,6 +15,7 @@ pub struct Normalized<T> {
     pub warning: Option<Vec<String>>,
 }
 impl<T> Normalized<T> {
+    #[inline]
     #[must_use]
     pub fn new(value: T, warnings: Vec<String>) -> Self {
         Self {
@@ -28,12 +24,27 @@ impl<T> Normalized<T> {
         }
     }
 }
+#[expect(
+    clippy::module_name_repetitions,
+    reason = "The facade function name mirrors the SearchQueryArguments model name."
+)]
+#[inline]
 pub fn search_arguments(raw: Option<Value>) -> Result<Normalized<SearchQueryArguments>> {
     typed::search_arguments(raw)
 }
+#[expect(
+    clippy::module_name_repetitions,
+    reason = "The facade function name mirrors the OpenArguments model name."
+)]
+#[inline]
 pub fn open_arguments(raw: Option<Value>) -> Result<Normalized<OpenArguments>> {
     typed::open_arguments(raw)
 }
+#[expect(
+    clippy::module_name_repetitions,
+    reason = "The facade function name mirrors the FindArguments model name."
+)]
+#[inline]
 pub fn find_arguments(raw: Option<Value>) -> Result<Normalized<FindArguments>> {
     typed::find_arguments(raw)
 }

@@ -1,21 +1,25 @@
-#![expect(
-    clippy::pedantic,
-    clippy::restriction,
-    reason = "SSRF address classification needs explicit network ranges."
-)]
 use crate::{Result, config::SsrfConfig, error::AppError};
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use core::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use tokio::net::lookup_host;
 use url::{Host, Url};
 #[derive(Clone, Debug)]
+#[expect(
+    clippy::module_name_repetitions,
+    reason = "The SSRF guard type name keeps the security boundary explicit."
+)]
 pub struct SsrfGuard {
     config: SsrfConfig,
 }
 impl SsrfGuard {
+    #[inline]
     #[must_use]
     pub const fn new(config: SsrfConfig) -> Self {
         Self { config }
     }
+    #[expect(
+        clippy::missing_inline_in_public_items,
+        reason = "URL validation may perform DNS lookup and is not an inline candidate."
+    )]
     pub async fn validate_url(&self, url: &Url) -> Result<()> {
         if !matches!(url.scheme(), "http" | "https") {
             return Err(AppError::client("URL must use HTTP or HTTPS."));
@@ -46,7 +50,7 @@ impl SsrfGuard {
         let resolved_port = port.unwrap_or(443);
         let addresses = lookup_host((normalized.as_str(), resolved_port))
             .await
-            .map_err(|_| AppError::client("URL host could not be resolved."))?;
+            .map_err(|_error| AppError::client("URL host could not be resolved."))?;
         let mut resolved_any = false;
         for socket in addresses {
             resolved_any = true;
@@ -66,6 +70,7 @@ impl SsrfGuard {
         ))
     }
 }
+#[inline]
 #[must_use]
 pub fn is_public_ip(address: IpAddr) -> bool {
     match address {
@@ -100,6 +105,10 @@ fn is_public_ipv6(ip: Ipv6Addr) -> bool {
         || (segments[0] & 0xffc0) == 0xfe80
         || (segments[0] == 0x2001 && segments[1] == 0x0db8))
 }
+#[expect(
+    clippy::case_sensitive_file_extension_comparisons,
+    reason = "Hostnames are already lowercased before local suffix checks."
+)]
 fn is_local_hostname(host: &str) -> bool {
     matches!(
         host,

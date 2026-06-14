@@ -1,8 +1,3 @@
-#![expect(
-    clippy::pedantic,
-    clippy::restriction,
-    reason = "Tool service methods are named after MCP tools."
-)]
 use crate::{
     Result,
     arguments::{find_arguments, open_arguments, search_arguments},
@@ -24,6 +19,7 @@ pub struct ToolService {
     search: ExaSearchClient,
 }
 impl ToolService {
+    #[inline]
     pub fn new(config: AppConfig) -> Result<Self> {
         Ok(Self {
             chunker: TokenChunker::new(&config.chunking)?,
@@ -36,6 +32,10 @@ impl ToolService {
     pub(crate) const fn config(&self) -> &AppConfig {
         &self.config
     }
+    #[expect(
+        clippy::missing_inline_in_public_items,
+        reason = "Tool dispatch performs async service work and is not an inline candidate."
+    )]
     pub async fn call(
         &self,
         name: &str,

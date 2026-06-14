@@ -1,9 +1,3 @@
-#![expect(
-    clippy::map_err_ignore,
-    clippy::missing_inline_in_public_items,
-    clippy::needless_pass_by_value,
-    reason = "Manual validation preserves stable client-facing messages."
-)]
 use crate::{
     Result,
     arguments::{
@@ -18,8 +12,9 @@ use crate::{
         SearchQueryArguments, SearchQueryRequest,
     },
 };
-use sonic_rs::{JsonContainerTrait, JsonValueTrait, Value};
+use sonic_rs::{JsonContainerTrait as _, JsonValueTrait as _, Value};
 use url::Url;
+#[inline]
 pub fn search_arguments(raw: Option<Value>) -> Result<Normalized<SearchQueryArguments>> {
     let (maps, warnings) = normalize_requests(raw, SEARCH_FIELDS)?;
     let mut requests = Vec::with_capacity(maps.len());
@@ -29,7 +24,7 @@ pub fn search_arguments(raw: Option<Value>) -> Result<Normalized<SearchQueryArgu
             recency: optional_usize(map, "recency", &format!("requests[{index}].recency"))?
                 .map(u64::try_from)
                 .transpose()
-                .map_err(|_| {
+                .map_err(|_overflow| {
                     AppError::client("Invalid request: requests[].recency is too large")
                 })?,
             domains: optional_string_list(map, "domains", &format!("requests[{index}].domains"))?,
@@ -38,6 +33,7 @@ pub fn search_arguments(raw: Option<Value>) -> Result<Normalized<SearchQueryArgu
     }
     Ok(Normalized::new(SearchQueryArguments { requests }, warnings))
 }
+#[inline]
 pub fn open_arguments(raw: Option<Value>) -> Result<Normalized<OpenArguments>> {
     let (mut maps, mut warnings) = normalize_requests(raw, OPEN_FIELDS)?;
     normalize_open_chunks(&mut maps, &mut warnings);
@@ -49,6 +45,7 @@ pub fn open_arguments(raw: Option<Value>) -> Result<Normalized<OpenArguments>> {
     }
     Ok(Normalized::new(OpenArguments { requests }, warnings))
 }
+#[inline]
 pub fn find_arguments(raw: Option<Value>) -> Result<Normalized<FindArguments>> {
     let (maps, warnings) = normalize_requests(raw, FIND_FIELDS)?;
     let mut requests = Vec::with_capacity(maps.len());
@@ -91,7 +88,7 @@ fn normalize_open_chunks(maps: &mut [RequestMap], warnings: &mut Vec<String>) {
 fn required_http_url(map: &RequestMap, field: &str, path: &str) -> Result<String> {
     let value = required_string(map, field, path)?;
     let parsed = Url::parse(&value)
-        .map_err(|_| validation(format!("{path} must be an absolute HTTP or HTTPS URL")))?;
+        .map_err(|_error| validation(format!("{path} must be an absolute HTTP or HTTPS URL")))?;
     if matches!(parsed.scheme(), "http" | "https") && parsed.host_str().is_some() {
         return Ok(value);
     }
@@ -164,7 +161,7 @@ fn positive_usize(value: &Value, path: &str) -> Result<usize> {
             "{path} must be greater than or equal to 1"
         )));
     }
-    usize::try_from(number).map_err(|_| validation(format!("{path} is too large")))
+    usize::try_from(number).map_err(|_overflow| validation(format!("{path} is too large")))
 }
 fn integer_value(value: &Value) -> Option<i128> {
     if value.as_bool().is_some() {
@@ -194,6 +191,10 @@ fn is_empty(value: &Value) -> bool {
     value.as_array().is_some_and(sonic_rs::Array::is_empty)
         || value.as_object().is_some_and(sonic_rs::Object::is_empty)
 }
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "Validation callers build owned messages that are immediately prefixed."
+)]
 fn validation(message: String) -> AppError {
     AppError::client(format!("Invalid request: {message}"))
 }

@@ -1,9 +1,5 @@
-#![expect(
-    clippy::pedantic,
-    clippy::restriction,
-    reason = "Token slicing is bounded by tokenizer output and regex byte spans."
-)]
 use crate::{Result, config::ChunkingConfig, error::AppError};
+use num_traits::ToPrimitive as _;
 use tiktoken::CoreBpe;
 #[derive(Clone, Debug)]
 pub struct TextChunk {
@@ -17,19 +13,25 @@ pub struct TokenChunker {
     overlap_tokens: usize,
 }
 impl TokenChunker {
+    #[inline]
     pub fn new(config: &ChunkingConfig) -> Result<Self> {
         let encoder = tiktoken::get_encoding(&config.tokenizer)
             .ok_or_else(|| AppError::config(format!("unknown tokenizer: {}", config.tokenizer)))?;
         Ok(Self {
             encoder,
             chunk_tokens: config.chunk_tokens,
-            overlap_tokens: (config.chunk_tokens as f64 * config.overlap_ratio) as usize,
+            overlap_tokens: overlap_tokens(config)?,
         })
     }
+    #[inline]
     #[must_use]
     pub fn count_tokens(&self, text: &str) -> usize {
         self.encoder.encode(text).len()
     }
+    #[expect(
+        clippy::missing_inline_in_public_items,
+        reason = "Splitting text allocates chunks and decodes token ranges, so inlining is not useful."
+    )]
     pub fn split(&self, text: &str) -> Result<Vec<TextChunk>> {
         let tokens = self.encoder.encode(text);
         if tokens.len() <= self.chunk_tokens {
@@ -43,9 +45,12 @@ impl TokenChunker {
         let mut start = 0;
         while start < tokens.len() {
             let end = tokens.len().min(start.saturating_add(self.chunk_tokens));
+            let token_window = tokens.get(start..end).ok_or_else(|| {
+                AppError::internal("token chunk range was outside tokenizer output")
+            })?;
             chunks.push(TextChunk {
                 index: chunks.len() + 1,
-                content: self.decode(&tokens[start..end])?,
+                content: self.decode(token_window)?,
             });
             if end == tokens.len() {
                 break;
@@ -54,6 +59,10 @@ impl TokenChunker {
         }
         Ok(chunks)
     }
+    #[expect(
+        clippy::missing_inline_in_public_items,
+        reason = "Snippet extraction performs tokenization and allocation, so inlining is not useful."
+    )]
     pub fn snippet_around_span(
         &self,
         text: &str,
@@ -61,13 +70,30 @@ impl TokenChunker {
         end: usize,
         max_tokens: usize,
     ) -> Result<String> {
-        let before_tokens = self.encoder.encode(&text[..start]);
-        let match_tokens = self.encoder.encode(&text[start..end]);
-        let after_tokens = self.encoder.encode(&text[end..]);
+        let before_text = text
+            .get(..start)
+            .ok_or_else(|| AppError::internal("snippet start was not a character boundary"))?;
+        let match_text = text
+            .get(start..end)
+            .ok_or_else(|| AppError::internal("snippet range was not a character boundary"))?;
+        let after_text = text
+            .get(end..)
+            .ok_or_else(|| AppError::internal("snippet end was not a character boundary"))?;
+        let before_tokens = self.encoder.encode(before_text);
+        let match_tokens = self.encoder.encode(match_text);
+        let after_tokens = self.encoder.encode(after_text);
         if match_tokens.len() >= max_tokens {
-            return self.decode(&match_tokens[..max_tokens]);
+            let selected = match_tokens.get(..max_tokens).ok_or_else(|| {
+                AppError::internal("snippet token limit exceeded match token range")
+            })?;
+            return self.decode(selected);
         }
         let remaining = max_tokens.saturating_sub(match_tokens.len());
+        #[expect(
+            clippy::integer_division,
+            clippy::integer_division_remainder_used,
+            reason = "The remaining token budget is intentionally split evenly around the match."
+        )]
         let mut left_count = before_tokens.len().min(remaining / 2);
         let mut right_count = after_tokens.len().min(remaining.saturating_sub(left_count));
         let unused = remaining
@@ -83,7 +109,10 @@ impl TokenChunker {
         );
         let mut selected = tail(&before_tokens, left_count);
         selected.extend_from_slice(&match_tokens);
-        selected.extend_from_slice(&after_tokens[..right_count]);
+        let right_tokens = after_tokens.get(..right_count).ok_or_else(|| {
+            AppError::internal("right snippet token range exceeded tokenizer output")
+        })?;
+        selected.extend_from_slice(right_tokens);
         self.decode(&selected)
     }
     fn decode(&self, tokens: &[u32]) -> Result<String> {
@@ -92,9 +121,23 @@ impl TokenChunker {
             .map_err(|error| AppError::internal(format!("token decode failed: {error}")))
     }
 }
+fn overlap_tokens(config: &ChunkingConfig) -> Result<usize> {
+    let chunk_tokens = config
+        .chunk_tokens
+        .to_f64()
+        .ok_or_else(|| AppError::config("chunking.chunk_tokens is too large"))?;
+    (chunk_tokens * config.overlap_ratio)
+        .floor()
+        .to_usize()
+        .ok_or_else(|| AppError::config("chunking.overlap_ratio produced too many tokens"))
+}
 fn tail(items: &[u32], count: usize) -> Vec<u32> {
     if count == 0 {
         return Vec::new();
     }
-    items[items.len().saturating_sub(count)..].to_vec()
+    let start = items.len().saturating_sub(count);
+    if let Some(tail) = items.get(start..) {
+        return tail.to_vec();
+    }
+    Vec::new()
 }

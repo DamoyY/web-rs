@@ -1,8 +1,3 @@
-#![expect(
-    clippy::pedantic,
-    clippy::restriction,
-    reason = "Exa request models preserve upstream API field names."
-)]
 use crate::{
     Result,
     config::{AppConfig, SearchConfig},
@@ -15,6 +10,10 @@ use futures::future::try_join_all;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
 #[derive(Clone)]
+#[expect(
+    clippy::module_name_repetitions,
+    reason = "The client type name mirrors the upstream Exa Search service."
+)]
 pub struct ExaSearchClient {
     config: SearchConfig,
     timeout_seconds: f64,
@@ -63,6 +62,7 @@ struct ExaResult {
     highlights: Option<Vec<String>>,
 }
 impl ExaSearchClient {
+    #[inline]
     #[must_use]
     pub fn new(config: &AppConfig) -> Self {
         Self {
@@ -72,6 +72,10 @@ impl ExaSearchClient {
             http: secure_client_from_config(config),
         }
     }
+    #[expect(
+        clippy::missing_inline_in_public_items,
+        reason = "Search fan-out performs async HTTP I/O and is not an inline candidate."
+    )]
     pub async fn search_many(
         &self,
         requests: &[SearchQueryRequest],
@@ -95,7 +99,7 @@ impl ExaSearchClient {
             .http
             .post(
                 &self.endpoint,
-                self.headers(api_key)?,
+                Self::headers(api_key)?,
                 body,
                 self.timeout_seconds,
             )
@@ -107,7 +111,7 @@ impl ExaSearchClient {
             ));
         }
         let payload: ExaSearchResponse = sonic_rs::from_slice(&response.body)
-            .map_err(|_| AppError::client("Exa returned malformed JSON."))?;
+            .map_err(|_error| AppError::client("Exa returned malformed JSON."))?;
         Ok(payload.results.into_iter().map(to_search_result).collect())
     }
     fn payload<'request>(
@@ -134,7 +138,7 @@ impl ExaSearchClient {
             },
         }
     }
-    fn headers(&self, api_key: &str) -> Result<HeaderMap> {
+    fn headers(api_key: &str) -> Result<HeaderMap> {
         let mut headers = HeaderMap::new();
         headers.insert(
             crate::search::api_key_header(),

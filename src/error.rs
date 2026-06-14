@@ -1,13 +1,10 @@
-#![expect(
-    clippy::exhaustive_enums,
-    clippy::impl_trait_in_params,
-    clippy::missing_inline_in_public_items,
-    clippy::module_name_repetitions,
-    clippy::pattern_type_mismatch,
-    reason = "Error constructors accept caller-owned or borrowed messages."
-)]
 use thiserror::Error;
 #[derive(Debug, Error)]
+#[expect(
+    clippy::exhaustive_enums,
+    clippy::module_name_repetitions,
+    reason = "Application error variants are closed and keep the AppError API explicit."
+)]
 pub enum AppError {
     #[error("{0}")]
     Client(String),
@@ -19,19 +16,36 @@ pub enum AppError {
     Internal(String),
 }
 impl AppError {
+    #[inline]
     #[must_use]
-    pub fn client(message: impl Into<String>) -> Self {
+    pub fn client<Message>(message: Message) -> Self
+    where
+        Message: Into<String>,
+    {
         Self::Client(message.into())
     }
+    #[inline]
     #[must_use]
-    pub fn config(message: impl Into<String>) -> Self {
+    pub fn config<Message>(message: Message) -> Self
+    where
+        Message: Into<String>,
+    {
         Self::Config(message.into())
     }
+    #[inline]
     #[must_use]
-    pub fn internal(message: impl Into<String>) -> Self {
+    pub fn internal<Message>(message: Message) -> Self
+    where
+        Message: Into<String>,
+    {
         Self::Internal(message.into())
     }
+    #[inline]
     #[must_use]
+    #[expect(
+        clippy::pattern_type_mismatch,
+        reason = "Matching borrowed variants keeps client messages available without moving self."
+    )]
     pub fn client_message(&self) -> String {
         match self {
             Self::Client(message) | Self::Upstream(message) | Self::Config(message) => {
@@ -45,6 +59,7 @@ impl AppError {
     }
 }
 impl From<reqwest::Error> for AppError {
+    #[inline]
     fn from(error: reqwest::Error) -> Self {
         if error.is_timeout() {
             return Self::Upstream("upstream request timed out. Retry later.".to_owned());
@@ -54,6 +69,11 @@ impl From<reqwest::Error> for AppError {
         )
     }
 }
+#[expect(
+    clippy::module_name_repetitions,
+    reason = "The helper name distinguishes HTTP service errors from AppError variants."
+)]
+#[inline]
 #[must_use]
 pub fn http_service_error(service: &str, status_code: u16) -> AppError {
     if matches!(status_code, 401 | 403) {

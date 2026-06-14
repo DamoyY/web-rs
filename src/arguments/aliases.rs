@@ -1,8 +1,3 @@
-#![expect(
-    clippy::impl_trait_in_params,
-    clippy::missing_inline_in_public_items,
-    reason = "Alias helpers are tiny and keep generic iterators readable."
-)]
 pub const SEARCH_FIELDS: &[FieldSpec] = &[
     FieldSpec::new("q", &["query", "queries"]),
     FieldSpec::new("recency", &["recencies"]),
@@ -24,20 +19,24 @@ pub struct FieldSpec {
     aliases: &'static [&'static str],
 }
 impl FieldSpec {
+    #[inline]
     #[must_use]
     pub const fn new(canonical: &'static str, aliases: &'static [&'static str]) -> Self {
         Self { canonical, aliases }
     }
+    #[inline]
     #[must_use]
     pub fn matches(self, raw: &str) -> bool {
         let lowered = raw.to_ascii_lowercase();
         lowered == self.canonical || self.aliases.iter().any(|alias| lowered == *alias)
     }
+    #[inline]
     #[must_use]
     pub const fn canonical(self) -> &'static str {
         self.canonical
     }
 }
+#[inline]
 #[must_use]
 pub fn canonical_field<'field>(fields: &'field [FieldSpec], raw: &str) -> Option<&'field str> {
     fields
@@ -45,6 +44,7 @@ pub fn canonical_field<'field>(fields: &'field [FieldSpec], raw: &str) -> Option
         .find(|field| field.matches(raw))
         .map(|field| field.canonical())
 }
+#[inline]
 #[must_use]
 pub fn canonical_category(raw: &str) -> Option<&'static str> {
     let lowered = raw.trim().to_ascii_lowercase();
@@ -60,8 +60,12 @@ pub fn canonical_category(raw: &str) -> Option<&'static str> {
         _ => None,
     }
 }
+#[inline]
 #[must_use]
-pub fn looks_like_request(fields: &[FieldSpec], keys: impl Iterator<Item = String>) -> bool {
+pub fn looks_like_request<Keys>(fields: &[FieldSpec], keys: Keys) -> bool
+where
+    Keys: Iterator<Item = String>,
+{
     keys.into_iter()
         .any(|key| canonical_field(fields, &key).is_some())
 }

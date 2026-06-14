@@ -1,7 +1,3 @@
-#![expect(
-    clippy::restriction,
-    reason = "Finder is a small protocol helper exposed through the page facade."
-)]
 use crate::{
     Result,
     config::FindConfig,
@@ -9,6 +5,10 @@ use crate::{
     page::{PageContent, TokenChunker},
 };
 use regex::Regex;
+#[expect(
+    clippy::missing_inline_in_public_items,
+    reason = "Page search loops over chunks and regex matches, so inlining is not useful."
+)]
 pub fn find_in_page(
     page: &PageContent,
     regex: &Regex,

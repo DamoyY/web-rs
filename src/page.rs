@@ -1,8 +1,3 @@
-#![expect(
-    clippy::pedantic,
-    clippy::restriction,
-    reason = "Page facade keeps names aligned with tool responses."
-)]
 pub mod chunking;
 pub mod fetcher;
 pub mod finder;
@@ -10,10 +5,23 @@ pub mod jina;
 pub mod open;
 #[cfg(test)]
 mod tests;
+#[expect(
+    clippy::module_name_repetitions,
+    reason = "The page facade re-exports response types with protocol names."
+)]
 pub type PageContent = fetcher::PageContent;
+#[expect(
+    clippy::module_name_repetitions,
+    reason = "The page facade re-exports response types with protocol names."
+)]
 pub type PageFetcher = fetcher::PageFetcher;
 pub type TextChunk = chunking::TextChunk;
 pub type TokenChunker = chunking::TokenChunker;
+#[expect(
+    clippy::module_name_repetitions,
+    reason = "The facade function name mirrors the FindPage response model."
+)]
+#[inline]
 pub fn find_in_page(
     page: &PageContent,
     regex: &regex::Regex,
@@ -23,6 +31,7 @@ pub fn find_in_page(
 ) -> crate::Result<crate::models::FindPage> {
     finder::find_in_page(page, regex, snippet_tokens, chunker, config)
 }
+#[inline]
 pub fn open_page_chunk(
     page: &PageContent,
     chunk_index: usize,

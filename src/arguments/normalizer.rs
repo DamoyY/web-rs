@@ -1,9 +1,3 @@
-#![expect(
-    clippy::nursery,
-    clippy::pedantic,
-    clippy::restriction,
-    reason = "Dynamic JSON normalization needs generic value traversal."
-)]
 use crate::{
     Result,
     arguments::{
@@ -12,9 +6,10 @@ use crate::{
     },
     error::AppError,
 };
-use sonic_rs::{JsonContainerTrait, JsonValueTrait, Value};
-use std::collections::BTreeMap;
+use alloc::collections::BTreeMap;
+use sonic_rs::{JsonContainerTrait as _, JsonValueTrait as _, Value};
 pub type RequestMap = BTreeMap<String, Value>;
+#[inline]
 pub fn normalize_requests(
     raw: Option<Value>,
     fields: &[aliases::FieldSpec],
@@ -34,7 +29,8 @@ pub fn normalize_requests(
                 );
             }
             warn_unused_top_fields(object, &key, &mut warnings);
-            return requests_from_value(value.clone(), fields, &mut warnings);
+            let (requests, next_warnings) = requests_from_value(value, fields, &mut warnings);
+            return Ok((requests, next_warnings));
         }
         let keys = object.iter().map(|(key, _)| key.to_owned());
         if aliases::looks_like_request(fields, keys) {
@@ -49,13 +45,14 @@ pub fn normalize_requests(
             "Invalid request: requests is required and must be an array",
         ));
     }
-    requests_from_value(arguments, fields, &mut warnings)
+    let (requests, next_warnings) = requests_from_value(arguments, fields, &mut warnings);
+    Ok((requests, next_warnings))
 }
 fn requests_from_value(
     value: Value,
     fields: &[aliases::FieldSpec],
     warnings: &mut Vec<String>,
-) -> Result<(Vec<RequestMap>, Vec<String>)> {
+) -> (Vec<RequestMap>, Vec<String>) {
     let parsed = parse_json_container(value);
     if let Some(array) = parsed.as_array() {
         let mut requests = Vec::with_capacity(array.len());
@@ -67,10 +64,10 @@ fn requests_from_value(
                 &format!("requests[{index}]"),
             ));
         }
-        return Ok((requests, warnings.clone()));
+        return (requests, warnings.clone());
     }
     push_unique(warnings, "pass \"requests\" as an array".to_owned());
-    Ok((
+    (
         vec![normalize_request_value(
             parsed,
             fields,
@@ -78,7 +75,7 @@ fn requests_from_value(
             "requests[0]",
         )],
         warnings.clone(),
-    ))
+    )
 }
 fn normalize_request_value(
     value: Value,
@@ -103,7 +100,7 @@ fn normalize_request_object(
         let Some(canonical) = aliases::canonical_field(fields, raw_key) else {
             push_unique(
                 warnings,
-                format!("ignored unrecognized field \"{}.{raw_key}\"", path),
+                format!("ignored unrecognized field \"{path}.{raw_key}\""),
             );
             continue;
         };

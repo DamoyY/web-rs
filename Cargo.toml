@@ -10,6 +10,7 @@ chrono = { version = "*", default-features = false, features = ["clock", "std"] 
 futures = "*"
 http = "*"
 mimalloc = { version = "*", features = ["v3"] }
+num-traits = "*"
 percent-encoding = "*"
 regex = "*"
 reqwest = { version = "*", default-features = false, features = ["deflate", "gzip", "json", "rustls-tls"] }

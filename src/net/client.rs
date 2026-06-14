@@ -1,16 +1,15 @@
-#![expect(
-    clippy::pedantic,
-    clippy::restriction,
-    reason = "HTTP client code keeps redirect validation explicit."
-)]
 use crate::{Result, error::AppError, net::SsrfGuard};
+use core::time::Duration;
 use reqwest::{
     Method, StatusCode, Url,
     header::{HeaderMap, HeaderValue, LOCATION},
     redirect::Policy,
 };
-use std::time::Duration;
 #[derive(Clone)]
+#[expect(
+    clippy::module_name_repetitions,
+    reason = "The secure HTTP client type name distinguishes guarded requests from reqwest::Client."
+)]
 pub struct SecureHttpClient {
     client: reqwest::Client,
     guard: SsrfGuard,
@@ -23,6 +22,7 @@ pub struct FetchResponse {
     pub body: Vec<u8>,
 }
 impl SecureHttpClient {
+    #[inline]
     #[must_use]
     pub fn new(max_redirects: usize, guard: SsrfGuard) -> Self {
         let client = reqwest::Client::builder()
@@ -35,6 +35,10 @@ impl SecureHttpClient {
             max_redirects,
         }
     }
+    #[expect(
+        clippy::missing_inline_in_public_items,
+        reason = "HTTP GET performs async network I/O and is not an inline candidate."
+    )]
     pub async fn get(
         &self,
         url: &str,
@@ -46,6 +50,10 @@ impl SecureHttpClient {
         self.request_with_redirects(Method::GET, parsed, headers, None, timeout_seconds)
             .await
     }
+    #[expect(
+        clippy::missing_inline_in_public_items,
+        reason = "HTTP POST performs async network I/O and is not an inline candidate."
+    )]
     pub async fn post(
         &self,
         url: &str,
@@ -104,7 +112,7 @@ fn redirect_target(location: Option<&HeaderValue>, base: &Url) -> Result<Option<
     };
     let value = raw
         .to_str()
-        .map_err(|_| AppError::client("Redirect location is not valid UTF-8."))?;
+        .map_err(|_error| AppError::client("Redirect location is not valid UTF-8."))?;
     base.join(value)
         .map(Some)
         .map_err(|error| AppError::client(format!("Redirect location is invalid: {error}")))
@@ -120,7 +128,7 @@ async fn collect_response(response: reqwest::Response) -> Result<FetchResponse> 
     })
 }
 fn duration(seconds: f64) -> Result<Duration> {
-    if seconds.is_finite() && seconds > 0.0 {
+    if seconds.is_finite() && seconds > 0.0_f64 {
         return Ok(Duration::from_secs_f64(seconds));
     }
     Err(AppError::config("HTTP timeout must be positive"))

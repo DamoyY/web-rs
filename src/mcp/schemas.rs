@@ -1,8 +1,3 @@
-#![expect(
-    clippy::pedantic,
-    clippy::restriction,
-    reason = "Tool schema names intentionally match MCP tool names."
-)]
 use crate::{
     Result,
     error::AppError,
@@ -10,6 +5,7 @@ use crate::{
 };
 use rmcp::model::{JsonObject, Tool};
 use schemars::{JsonSchema, schema_for};
+#[inline]
 pub fn tools() -> Result<Vec<Tool>> {
     Ok(vec![
         tool::<SearchQueryArguments>("search_query", "返回标题、日期、URL 与摘要。")?,
@@ -17,6 +13,7 @@ pub fn tools() -> Result<Vec<Tool>> {
         tool::<FindArguments>("find", "在页面中使用正则表达式查找匹配片段。")?,
     ])
 }
+#[inline]
 pub fn tool_by_name(name: &str) -> Result<Option<Tool>> {
     Ok(tools()?.into_iter().find(|tool| tool.name == name))
 }
@@ -34,6 +31,12 @@ where
         .map_err(|error| AppError::internal(format!("failed to build tool schema: {error}")))?;
     match value {
         rmcp::serde_json::Value::Object(object) => Ok(object),
-        _ => Err(AppError::internal("tool schema is not a JSON object")),
+        rmcp::serde_json::Value::Null
+        | rmcp::serde_json::Value::Bool(_)
+        | rmcp::serde_json::Value::Number(_)
+        | rmcp::serde_json::Value::String(_)
+        | rmcp::serde_json::Value::Array(_) => {
+            Err(AppError::internal("tool schema is not a JSON object"))
+        }
     }
 }

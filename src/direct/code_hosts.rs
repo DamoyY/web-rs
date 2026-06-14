@@ -1,11 +1,6 @@
-#![expect(
-    clippy::indexing_slicing,
-    clippy::missing_inline_in_public_items,
-    clippy::pattern_type_mismatch,
-    reason = "Code-host URL rewriting checks segment counts before indexing."
-)]
 use crate::config::DirectFetchConfig;
 use url::Url;
+#[inline]
 #[must_use]
 pub fn resolve_code_host_raw_url(
     parsed: &Url,
@@ -26,6 +21,10 @@ pub fn resolve_code_host_raw_url(
     }
     None
 }
+#[expect(
+    clippy::indexing_slicing,
+    reason = "GitHub URL segments are length-checked before fixed-position access."
+)]
 fn github_raw_url(parsed: &Url, host: &str, config: &DirectFetchConfig) -> Option<String> {
     if matches!(
         host,
@@ -45,6 +44,10 @@ fn github_raw_url(parsed: &Url, host: &str, config: &DirectFetchConfig) -> Optio
         )
     })
 }
+#[expect(
+    clippy::indexing_slicing,
+    reason = "Hugging Face URL segments are length-checked against the marker before slicing."
+)]
 fn huggingface_raw_url(parsed: &Url, host: &str, config: &DirectFetchConfig) -> Option<String> {
     let parts = path_parts(parsed.path());
     let marker = huggingface_marker_index(&parts)?;
@@ -61,6 +64,10 @@ fn huggingface_raw_url(parsed: &Url, host: &str, config: &DirectFetchConfig) -> 
         parts[marker + 1]
     ))
 }
+#[expect(
+    clippy::indexing_slicing,
+    reason = "GitLab URL segments are length-checked against the dash marker before slicing."
+)]
 fn gitlab_raw_url(parsed: &Url, host: &str, config: &DirectFetchConfig) -> Option<String> {
     let parts = path_parts(parsed.path());
     let dash = parts.iter().position(|part| part == "-")?;
@@ -77,6 +84,10 @@ fn gitlab_raw_url(parsed: &Url, host: &str, config: &DirectFetchConfig) -> Optio
         parts[dash + 2]
     ))
 }
+#[expect(
+    clippy::indexing_slicing,
+    reason = "Bitbucket URL segments are length-checked before fixed-position access."
+)]
 fn bitbucket_raw_url(parsed: &Url, host: &str, config: &DirectFetchConfig) -> Option<String> {
     let parts = path_parts(parsed.path());
     if parts.len() < 5 || !matches!(parts[2].as_str(), "src" | "raw") {
@@ -102,8 +113,8 @@ fn huggingface_marker_index(parts: &[String]) -> Option<usize> {
     parts
         .iter()
         .enumerate()
-        .find(|(index, part)| {
-            *index >= minimum && matches!(part.as_str(), "blob" | "raw" | "resolve")
+        .find(|&(index, part)| {
+            index >= minimum && matches!(part.as_str(), "blob" | "raw" | "resolve")
         })
         .map(|(index, _)| index)
 }

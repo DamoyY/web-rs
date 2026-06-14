@@ -1,9 +1,3 @@
-#![expect(
-    clippy::nursery,
-    clippy::pedantic,
-    clippy::restriction,
-    reason = "Jina client preserves upstream header and payload names."
-)]
 use crate::{
     Result,
     config::{AppConfig, JinaViewportConfig},
@@ -12,8 +6,12 @@ use crate::{
 };
 use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue};
 use serde::Serialize;
-use sonic_rs::{JsonContainerTrait, JsonValueTrait, Value};
+use sonic_rs::{JsonContainerTrait as _, JsonValueTrait as _, Value};
 #[derive(Clone)]
+#[expect(
+    clippy::module_name_repetitions,
+    reason = "The client type name mirrors the upstream Jina Reader service."
+)]
 pub struct JinaReaderClient {
     config: AppConfig,
     http: SecureHttpClient,
@@ -24,10 +22,15 @@ struct JinaPayload<'config> {
     viewport: &'config JinaViewportConfig,
 }
 impl JinaReaderClient {
+    #[inline]
     #[must_use]
     pub const fn new(config: AppConfig, http: SecureHttpClient) -> Self {
         Self { config, http }
     }
+    #[expect(
+        clippy::missing_inline_in_public_items,
+        reason = "Jina reads perform async HTTP I/O and are not inline candidates."
+    )]
     pub async fn read_markdown(&self, url: &str, api_key: &str) -> Result<String> {
         let headers = self.headers(api_key)?;
         let payload = JinaPayload {
@@ -104,14 +107,16 @@ fn extract_content(headers: &HeaderMap, body: &[u8]) -> Result<String> {
     if content_type == "text/event-stream" {
         return Ok(extract_event_stream_content(&String::from_utf8_lossy(body)));
     }
-    match sonic_rs::from_slice::<Value>(body) {
-        Ok(payload) => extract_payload_content(&payload).ok_or_else(|| {
-            AppError::client(
-                "Jina returned an unsupported response. Retry later or try another URL.",
-            )
-        }),
-        Err(_) => Ok(String::from_utf8_lossy(body).into_owned()),
-    }
+    sonic_rs::from_slice::<Value>(body).map_or_else(
+        |_error| Ok(String::from_utf8_lossy(body).into_owned()),
+        |payload| {
+            extract_payload_content(&payload).ok_or_else(|| {
+                AppError::client(
+                    "Jina returned an unsupported response. Retry later or try another URL.",
+                )
+            })
+        },
+    )
 }
 fn extract_payload_content(payload: &Value) -> Option<String> {
     if let Some(object) = payload.as_object() {
@@ -157,14 +162,19 @@ fn insert_header(headers: &mut HeaderMap, name: &'static str, value: &str) -> Re
     headers.insert(name, HeaderValue::from_str(value).map_err(header_error)?);
     Ok(())
 }
-fn header_bool(value: bool) -> &'static str {
+const fn header_bool(value: bool) -> &'static str {
     if value { "true" } else { "false" }
 }
 fn rewrite_arxiv_pdf_url(url: &str) -> String {
-    url.strip_prefix("https://arxiv.org/pdf/")
-        .map(|suffix| format!("https://arxiv.org/html/{suffix}"))
-        .unwrap_or_else(|| url.to_owned())
+    url.strip_prefix("https://arxiv.org/pdf/").map_or_else(
+        || url.to_owned(),
+        |suffix| format!("https://arxiv.org/html/{suffix}"),
+    )
 }
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "map_err passes InvalidHeaderValue by value and the formatter consumes only its Display output."
+)]
 fn header_error(error: reqwest::header::InvalidHeaderValue) -> AppError {
     AppError::internal(format!("invalid Jina header value: {error}"))
 }

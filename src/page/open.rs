@@ -1,13 +1,14 @@
-#![expect(
-    clippy::pedantic,
-    clippy::restriction,
-    reason = "Open-page chunk selection uses validated one-based indices."
-)]
 use crate::{
     Result,
+    error::AppError,
     models::OpenPage,
     page::{PageContent, TokenChunker},
 };
+#[expect(
+    clippy::missing_inline_in_public_items,
+    clippy::module_name_repetitions,
+    reason = "Open-page chunk selection allocates chunks and keeps the response model terminology."
+)]
 pub fn open_page_chunk(
     page: &PageContent,
     chunk_index: usize,
@@ -21,9 +22,13 @@ pub fn open_page_chunk(
             "\"requests[{request_index}].chunk\" must be between 1 and {}; using 1",
             chunks.len()
         ));
-        &chunks[0]
+        chunks
+            .first()
+            .ok_or_else(|| AppError::internal("page split produced no chunks"))?
     } else {
-        &chunks[chunk_index - 1]
+        chunks
+            .get(chunk_index - 1)
+            .ok_or_else(|| AppError::internal("validated page chunk was missing"))?
     };
     Ok(OpenPage {
         chunk: selected.index,

@@ -1,13 +1,11 @@
-#![expect(
-    clippy::exhaustive_enums,
-    clippy::missing_inline_in_public_items,
-    clippy::pattern_type_mismatch,
-    reason = "Public models intentionally mirror MCP response schemas."
-)]
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(rename_all = "kebab-case")]
+#[expect(
+    clippy::exhaustive_enums,
+    reason = "Search categories are the closed set accepted by the upstream API."
+)]
 pub enum SearchCategory {
     Company,
     #[serde(rename = "research paper")]
@@ -21,6 +19,11 @@ pub enum SearchCategory {
     People,
 }
 impl SearchCategory {
+    #[expect(
+        clippy::pattern_type_mismatch,
+        reason = "Matching borrowed enum variants avoids copying the public model value."
+    )]
+    #[inline]
     #[must_use]
     pub const fn as_str(&self) -> &'static str {
         match self {

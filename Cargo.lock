@@ -2188,6 +2188,7 @@ dependencies = [
  "futures",
  "http",
  "mimalloc",
+ "num-traits",
  "percent-encoding",
  "regex",
  "reqwest",

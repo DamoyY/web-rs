@@ -3,6 +3,10 @@ use crate::{
     direct::{ResponseFormat, resolve_direct_fetch_target},
 };
 #[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The test uses assertions while Result keeps setup failures readable."
+)]
 fn github_blob_resolves_to_raw_text_url() -> Result<()> {
     let config = config::load_embedded()?;
     let target = resolve_direct_fetch_target(
@@ -18,6 +22,10 @@ fn github_blob_resolves_to_raw_text_url() -> Result<()> {
     Ok(())
 }
 #[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The test uses assertions while Result keeps setup failures readable."
+)]
 fn scoped_npm_package_uses_registry_json() -> Result<()> {
     let config = config::load_embedded()?;
     let target = resolve_direct_fetch_target(

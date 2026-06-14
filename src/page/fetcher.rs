@@ -1,8 +1,3 @@
-#![expect(
-    clippy::pedantic,
-    clippy::restriction,
-    reason = "Page fetcher names mirror original reader selection behavior."
-)]
 use crate::{
     Result,
     config::AppConfig,
@@ -21,11 +16,19 @@ pub struct PageContent {
     pub markdown: String,
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[expect(
+    clippy::exhaustive_enums,
+    reason = "Page sources are closed because callers branch on the configured readers."
+)]
 pub enum PageSource {
     Jina,
     Direct,
 }
 #[derive(Clone)]
+#[expect(
+    clippy::module_name_repetitions,
+    reason = "The fetcher type name mirrors the page facade API."
+)]
 pub struct PageFetcher {
     config: AppConfig,
     http: SecureHttpClient,
@@ -33,6 +36,7 @@ pub struct PageFetcher {
     jina: JinaReaderClient,
 }
 impl PageFetcher {
+    #[inline]
     #[must_use]
     pub fn new(config: AppConfig) -> Self {
         let http = secure_client_from_config(&config);
@@ -45,6 +49,10 @@ impl PageFetcher {
             jina,
         }
     }
+    #[expect(
+        clippy::missing_inline_in_public_items,
+        reason = "Page fetching performs async network I/O and is not an inline candidate."
+    )]
     pub async fn fetch(&self, url: &str, jina_api_key: Option<&str>) -> Result<PageContent> {
         let parsed =
             Url::parse(url).map_err(|error| AppError::client(format!("Invalid URL: {error}")))?;
@@ -97,7 +105,7 @@ fn direct_fetch_targets(
         markdown_direct_fetch_target(url),
     ];
     if let Some(target) = resolve_direct_fetch_target(url, config) {
-        return std::iter::once(target).chain(markdown_targets).collect();
+        return core::iter::once(target).chain(markdown_targets).collect();
     }
     markdown_targets
 }

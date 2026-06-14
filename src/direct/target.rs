@@ -1,17 +1,18 @@
-#![expect(
-    clippy::exhaustive_enums,
-    clippy::impl_trait_in_params,
-    clippy::missing_inline_in_public_items,
-    clippy::module_name_repetitions,
-    reason = "Target names mirror direct-fetch protocol concepts."
-)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[expect(
+    clippy::exhaustive_enums,
+    reason = "Direct fetch response formats are closed protocol cases handled exhaustively."
+)]
 pub enum ResponseFormat {
     Text,
     MediaWikiApi,
     PackageRegistryJson,
 }
 #[derive(Clone, Debug)]
+#[expect(
+    clippy::module_name_repetitions,
+    reason = "The target type name mirrors the direct fetch protocol branch."
+)]
 pub struct DirectFetchTarget {
     pub original_url: String,
     pub request_url: String,
@@ -22,8 +23,13 @@ pub struct DirectFetchTarget {
     pub json_fields_last: Vec<String>,
 }
 impl DirectFetchTarget {
+    #[inline]
     #[must_use]
-    pub fn text(original_url: impl Into<String>, request_url: impl Into<String>) -> Self {
+    pub fn text<OriginalUrl, RequestUrl>(original_url: OriginalUrl, request_url: RequestUrl) -> Self
+    where
+        OriginalUrl: Into<String>,
+        RequestUrl: Into<String>,
+    {
         Self {
             original_url: original_url.into(),
             request_url: request_url.into(),
@@ -34,6 +40,7 @@ impl DirectFetchTarget {
             json_fields_last: Vec::new(),
         }
     }
+    #[inline]
     #[must_use]
     pub fn markdown_accept(url: &str) -> Self {
         let mut target = Self::text(url, url);
@@ -41,6 +48,7 @@ impl DirectFetchTarget {
         target.required_content_type = Some("text/markdown".to_owned());
         target
     }
+    #[inline]
     #[must_use]
     pub fn package(original_url: &str, request_url: String, fields_last: Vec<String>) -> Self {
         let mut target = Self::text(original_url, request_url);
@@ -48,6 +56,7 @@ impl DirectFetchTarget {
         target.json_fields_last = fields_last;
         target
     }
+    #[inline]
     #[must_use]
     pub fn mediawiki(original_url: &str, request_url: String) -> Self {
         let mut target = Self::text(original_url, request_url);

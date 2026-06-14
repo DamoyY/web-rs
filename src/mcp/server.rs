@@ -1,8 +1,3 @@
-#![expect(
-    clippy::missing_trait_methods,
-    clippy::manual_async_fn,
-    reason = "RMCP ServerHandler supplies useful defaults and return-position futures."
-)]
 use crate::{
     VERSION,
     config::AppConfig,
@@ -20,12 +15,20 @@ use rmcp::{
     service::{MaybeSendFuture, RequestContext, RoleServer},
 };
 use sonic_rs::Value;
+#[expect(
+    clippy::missing_trait_methods,
+    reason = "RMCP ServerHandler defaults are intentionally used for unsupported protocol hooks."
+)]
 impl ServerHandler for ToolService {
     #[inline]
     fn get_info(&self) -> ServerInfo {
         server_info(self.config())
     }
     #[inline]
+    #[expect(
+        clippy::manual_async_fn,
+        reason = "The trait requires return-position futures with MaybeSendFuture bounds."
+    )]
     fn list_tools(
         &self,
         _request: Option<PaginatedRequestParams>,
@@ -42,6 +45,10 @@ impl ServerHandler for ToolService {
         schemas::tool_by_name(name).ok().flatten()
     }
     #[inline]
+    #[expect(
+        clippy::manual_async_fn,
+        reason = "The trait requires return-position futures with MaybeSendFuture bounds."
+    )]
     fn call_tool(
         &self,
         request: CallToolRequestParams,

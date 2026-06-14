@@ -1,14 +1,5 @@
-#![expect(
-    clippy::indexing_slicing,
-    clippy::manual_string_new,
-    clippy::missing_inline_in_public_items,
-    clippy::needless_pass_by_value,
-    clippy::return_and_then,
-    clippy::unused_trait_names,
-    reason = "MediaWiki URL and JSON traversal validates structure before use."
-)]
 use crate::{Result, error::AppError};
-use sonic_rs::{JsonContainerTrait, JsonValueTrait, Value};
+use sonic_rs::{JsonContainerTrait as _, JsonValueTrait as _, Value};
 use url::Url;
 const WIKIMEDIA_DOMAINS: &[&str] = &[
     "mediawiki.org",
@@ -26,6 +17,7 @@ const WIKIMEDIA_DOMAINS: &[&str] = &[
     "wiktionary.org",
 ];
 #[must_use]
+#[inline]
 pub fn resolve_mediawiki_api_url(parsed: &Url) -> Option<String> {
     let host = parsed.host_str()?.to_ascii_lowercase();
     let (selector, api_path) = if is_wikimedia_host(&host) {
@@ -36,9 +28,10 @@ pub fn resolve_mediawiki_api_url(parsed: &Url) -> Option<String> {
         return None;
     };
     let mut api = Url::parse(&format!("https://{host}{api_path}")).ok()?;
-    append_api_parameters(&mut api, selector);
+    append_api_parameters(&mut api, &selector);
     Some(api.to_string())
 }
+#[inline]
 pub fn extract_mediawiki_content(payload: &Value) -> Result<String> {
     let object = payload
         .as_object()
@@ -62,7 +55,11 @@ pub fn extract_mediawiki_content(payload: &Value) -> Result<String> {
             "MediaWiki API did not return exactly one page.",
         ));
     }
-    extract_page_content(&pages[0])
+    let page = pages
+        .as_slice()
+        .first()
+        .ok_or_else(|| AppError::client("MediaWiki API did not return exactly one page."))?;
+    extract_page_content(page)
 }
 fn extract_page_content(page: &Value) -> Result<String> {
     let page_object = page
@@ -80,7 +77,11 @@ fn extract_page_content(page: &Value) -> Result<String> {
             "MediaWiki API response is missing page revisions.",
         ));
     }
-    revisions[0]
+    let revision = revisions
+        .as_slice()
+        .first()
+        .ok_or_else(|| AppError::client("MediaWiki API response is missing page revisions."))?;
+    revision
         .get("slots")
         .and_then(|slots| slots.get("main"))
         .and_then(|main| main.get("content"))
@@ -92,10 +93,10 @@ fn wikimedia_selector(parsed: &Url) -> Option<(String, String)> {
     if let Some(title) = parsed.path().strip_prefix("/wiki/") {
         return page_selector(parsed, Some(percent_decode(title)));
     }
-    (parsed.path() == "/w/index.php")
-        .then(|| first_query_value(parsed, "title"))
-        .flatten()
-        .and_then(|title| page_selector(parsed, Some(title)))
+    if parsed.path() == "/w/index.php" {
+        return page_selector(parsed, Some(first_query_value(parsed, "title")?));
+    }
+    None
 }
 fn fandom_selector_and_api_path(parsed: &Url) -> Option<((String, String), String)> {
     let (prefix, title) = if let Some(article) = fandom_article_path(parsed.path()) {
@@ -120,7 +121,7 @@ fn page_selector(parsed: &Url, title: Option<String>) -> Option<(String, String)
     }
     title.map(|value| ("titles".to_owned(), value))
 }
-fn append_api_parameters(api: &mut Url, selector: (String, String)) {
+fn append_api_parameters(api: &mut Url, selector: &(String, String)) {
     let mut pairs = api.query_pairs_mut();
     pairs
         .append_pair("action", "query")
@@ -137,28 +138,36 @@ fn append_api_parameters(api: &mut Url, selector: (String, String)) {
 }
 fn fandom_article_path(path: &str) -> Option<(String, String)> {
     let parts: Vec<&str> = path.split('/').collect();
-    if parts.len() >= 3 && parts[1] == "wiki" {
-        return Some(("".to_owned(), percent_decode(&parts[2..].join("/"))));
+    if parts.get(1).is_some_and(|part| *part == "wiki") {
+        let title = parts.get(2..)?;
+        if !title.is_empty() {
+            return Some((String::new(), percent_decode(&title.join("/"))));
+        }
     }
-    if parts.len() >= 4 && parts[2] == "wiki" {
-        return Some((
-            format!("/{}", parts[1]),
-            percent_decode(&parts[3..].join("/")),
-        ));
+    if parts.get(2).is_some_and(|part| *part == "wiki") {
+        let prefix = parts.get(1)?;
+        let title = parts.get(3..)?;
+        if !title.is_empty() {
+            return Some((format!("/{prefix}"), percent_decode(&title.join("/"))));
+        }
     }
     None
 }
 fn fandom_index_prefix(path: &str) -> Option<String> {
     let parts: Vec<&str> = path.split('/').collect();
-    if matches!(parts.as_slice(), ["", "index.php"] | ["", "w", "index.php"]) {
+    if parts.as_slice() == ["", "index.php"] || parts.as_slice() == ["", "w", "index.php"] {
         return Some(String::new());
     }
-    (parts.len() == 3 && parts[2] == "index.php").then(|| format!("/{}", parts[1]))
+    if parts.len() == 3 && parts.get(2).is_some_and(|part| *part == "index.php") {
+        let prefix = parts.get(1)?;
+        return Some(format!("/{prefix}"));
+    }
+    None
 }
 fn first_query_value(parsed: &Url, name: &str) -> Option<String> {
     parsed
         .query_pairs()
-        .find(|(key, _)| key == name)
+        .find(|pair| pair.0.as_ref() == name)
         .map(|(_, value)| value.into_owned())
 }
 fn is_wikimedia_host(host: &str) -> bool {
