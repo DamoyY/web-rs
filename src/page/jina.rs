@@ -10,10 +10,6 @@ use sonic_rs::{JsonContainerTrait as _, JsonValueTrait as _, Value};
 #[cfg(test)]
 mod tests;
 #[derive(Clone)]
-#[expect(
-    clippy::module_name_repetitions,
-    reason = "The client type name mirrors the upstream Jina Reader service."
-)]
 pub struct JinaReaderClient {
     config: AppConfig,
     http: SecureHttpClient,

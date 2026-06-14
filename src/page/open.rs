@@ -6,7 +6,6 @@ use crate::{
 };
 #[expect(
     clippy::missing_inline_in_public_items,
-    clippy::module_name_repetitions,
     reason = "Open-page chunk selection allocates chunks and keeps the response model terminology."
 )]
 pub fn open_page_chunk(

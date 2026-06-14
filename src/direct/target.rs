@@ -10,10 +10,6 @@ pub enum ResponseFormat {
     StackOverflowQuestionJson,
 }
 #[derive(Clone, Debug)]
-#[expect(
-    clippy::module_name_repetitions,
-    reason = "The target type name mirrors the direct fetch protocol branch."
-)]
 pub struct DirectFetchTarget {
     pub original_url: String,
     pub request_url: String,

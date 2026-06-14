@@ -25,10 +25,6 @@ pub enum PageSource {
     Direct,
 }
 #[derive(Clone)]
-#[expect(
-    clippy::module_name_repetitions,
-    reason = "The fetcher type name mirrors the page facade API."
-)]
 pub struct PageFetcher {
     config: AppConfig,
     http: SecureHttpClient,

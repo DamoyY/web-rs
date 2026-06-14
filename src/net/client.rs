@@ -11,10 +11,6 @@ use reqwest::{
     redirect::Policy,
 };
 #[derive(Clone)]
-#[expect(
-    clippy::module_name_repetitions,
-    reason = "The secure HTTP client type name distinguishes guarded requests from reqwest::Client."
-)]
 pub struct SecureHttpClient {
     client: reqwest::Client,
     guard: SsrfGuard,

@@ -10,10 +10,6 @@ use futures::future::try_join_all;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
 #[derive(Clone)]
-#[expect(
-    clippy::module_name_repetitions,
-    reason = "The client type name mirrors the upstream Exa Search service."
-)]
 pub struct ExaSearchClient {
     config: SearchConfig,
     timeout_seconds: f64,

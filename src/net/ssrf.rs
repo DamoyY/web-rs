@@ -3,10 +3,6 @@ use core::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use tokio::net::lookup_host;
 use url::{Host, Url};
 #[derive(Clone, Debug)]
-#[expect(
-    clippy::module_name_repetitions,
-    reason = "The SSRF guard type name keeps the security boundary explicit."
-)]
 pub struct SsrfGuard {
     config: SsrfConfig,
 }

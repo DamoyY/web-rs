@@ -2,7 +2,6 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 #[expect(
     clippy::exhaustive_enums,
-    clippy::module_name_repetitions,
     reason = "Application error variants are closed and keep the AppError API explicit."
 )]
 pub enum AppError {
@@ -69,10 +68,6 @@ impl From<reqwest::Error> for AppError {
         )
     }
 }
-#[expect(
-    clippy::module_name_repetitions,
-    reason = "The helper name distinguishes HTTP service errors from AppError variants."
-)]
 #[inline]
 #[must_use]
 pub fn http_service_error(service: &str, status_code: u16) -> AppError {

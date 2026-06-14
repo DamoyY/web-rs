@@ -2,10 +2,6 @@ use percent_encoding::percent_decode_str;
 use sonic_rs::JsonContainerTrait as _;
 use url::Url;
 #[derive(Debug)]
-#[expect(
-    clippy::module_name_repetitions,
-    reason = "The target type name mirrors the package registry protocol branch."
-)]
 pub struct PackageRegistryTarget {
     pub request_url: String,
     pub json_fields_last: Vec<String>,

@@ -7,10 +7,6 @@ pub mod target;
 #[cfg(test)]
 mod tests;
 use crate::config::DirectFetchConfig;
-#[expect(
-    clippy::module_name_repetitions,
-    reason = "The direct facade re-exports the protocol target name."
-)]
 pub type DirectFetchTarget = target::DirectFetchTarget;
 pub type ResponseFormat = target::ResponseFormat;
 #[inline]

@@ -15,7 +15,6 @@ use sonic_rs::Value;
 const SIMILAR_CONTENT_THRESHOLD: f64 = 0.9;
 #[expect(
     clippy::missing_inline_in_public_items,
-    clippy::module_name_repetitions,
     reason = "The public direct fetch entrypoint performs HTTP I/O and keeps protocol terminology."
 )]
 pub async fn fetch_direct_text(
