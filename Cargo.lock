@@ -269,6 +269,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc14f565cf027a105f7a44ccf9e5b424348421a1d8952a8fc9d499d313107789"
 
 [[package]]
+name = "content_inspector"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7bda66e858c683005a53a9a60c69a4aca7eeaa45d124526e389f7aec8e62f38"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "core-foundation-sys"
 version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2211,12 +2220,14 @@ dependencies = [
  "anyhow",
  "axum",
  "chrono",
+ "content_inspector",
  "fancy-regex",
  "futures",
  "http",
  "mimalloc",
  "num-traits",
  "percent-encoding",
+ "rand 0.9.4",
  "reqwest",
  "rmcp",
  "schemars",

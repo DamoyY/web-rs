@@ -59,14 +59,13 @@ struct ExaResult {
 }
 impl ExaSearchClient {
     #[inline]
-    #[must_use]
-    pub fn new(config: &AppConfig) -> Self {
-        Self {
+    pub fn new(config: &AppConfig) -> Result<Self> {
+        Ok(Self {
             config: config.search.clone(),
             timeout_seconds: config.http.timeout_seconds,
             endpoint: config.search.endpoint.clone(),
-            http: secure_client_from_config(config),
-        }
+            http: secure_client_from_config(config)?,
+        })
     }
     #[expect(
         clippy::missing_inline_in_public_items,

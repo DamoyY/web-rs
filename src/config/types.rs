@@ -1,6 +1,5 @@
-use crate::{Result, error::AppError};
+use crate::{Result, config::validation, error::AppError};
 use serde::{Deserialize, Serialize};
-use url::Url;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ServerConfig {
@@ -9,8 +8,6 @@ pub struct ServerConfig {
     pub host: String,
     pub port: u16,
     pub log_level: String,
-    pub streamable_http_path: String,
-    pub health_path: String,
     pub protocol_version: String,
     pub stateful_http: bool,
     pub json_response: bool,
@@ -37,6 +34,7 @@ pub struct SearchConfig {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct HttpConfig {
+    pub user_agent: String,
     pub timeout_seconds: f64,
     pub direct_fetch_timeout_seconds: f64,
     pub max_redirects: usize,
@@ -59,6 +57,8 @@ pub struct JinaConfig {
     pub respond_with: String,
     pub retain_images: String,
     pub with_shadow_dom: bool,
+    pub arxiv_pdf_url_prefix: String,
+    pub arxiv_html_url_prefix: String,
     pub viewport: JinaViewportConfig,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -78,12 +78,18 @@ pub struct FindConfig {
 #[serde(deny_unknown_fields)]
 pub struct DirectFetchConfig {
     pub max_bytes: usize,
+    pub similarity_threshold: f64,
     pub github_hosts: Vec<String>,
     pub huggingface_hosts: Vec<String>,
     pub gitlab_hosts: Vec<String>,
     pub bitbucket_hosts: Vec<String>,
-    pub text_file_extensions: Vec<String>,
-    pub text_file_names: Vec<String>,
+    pub microsoft_learn_hosts: Vec<String>,
+    pub stack_overflow_hosts: Vec<String>,
+    pub stack_overflow_api_url_template: String,
+    pub npm_hosts: Vec<String>,
+    pub npm_registry_url_prefix: String,
+    pub wikimedia_domains: Vec<String>,
+    pub wikimedia_api_path: String,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -107,21 +113,25 @@ pub struct AppConfig {
 impl AppConfig {
     #[inline]
     pub fn validate(&self) -> Result<()> {
-        positive(&self.search.num_results, "search.num_results")?;
-        positive(
+        validation::positive(&self.search.num_results, "search.num_results")?;
+        validation::positive(
             &self.search.highlights_max_characters,
             "search.highlights_max_characters",
         )?;
-        positive(&self.search.livecrawl_timeout, "search.livecrawl_timeout")?;
-        positive(&self.chunking.chunk_tokens, "chunking.chunk_tokens")?;
-        positive(
+        validation::positive(&self.search.livecrawl_timeout, "search.livecrawl_timeout")?;
+        validation::positive(&self.chunking.chunk_tokens, "chunking.chunk_tokens")?;
+        validation::positive(
             &self.find.default_snippet_tokens,
             "find.default_snippet_tokens",
         )?;
-        positive(&self.find.max_matches_per_page, "find.max_matches_per_page")?;
-        positive(&self.direct_fetch.max_bytes, "direct_fetch.max_bytes")?;
-        positive_float(self.http.timeout_seconds, "http.timeout_seconds")?;
-        positive_float(
+        validation::positive(&self.find.max_matches_per_page, "find.max_matches_per_page")?;
+        validation::positive(&self.direct_fetch.max_bytes, "direct_fetch.max_bytes")?;
+        validation::threshold(
+            self.direct_fetch.similarity_threshold,
+            "direct_fetch.similarity_threshold",
+        )?;
+        validation::positive_float(self.http.timeout_seconds, "http.timeout_seconds")?;
+        validation::positive_float(
             self.http.direct_fetch_timeout_seconds,
             "http.direct_fetch_timeout_seconds",
         )?;
@@ -130,32 +140,27 @@ impl AppConfig {
                 "chunking.overlap_ratio must be >= 0 and < 1",
             ));
         }
-        parse_endpoint(&self.search.endpoint, "search.endpoint")?;
-        parse_endpoint(&self.jina.endpoint, "jina.endpoint")?;
+        validation::header_value(&self.http.user_agent, "http.user_agent")?;
+        validation::endpoint(&self.search.endpoint, "search.endpoint")?;
+        validation::endpoint(&self.jina.endpoint, "jina.endpoint")?;
+        validation::endpoint(&self.jina.arxiv_pdf_url_prefix, "jina.arxiv_pdf_url_prefix")?;
+        validation::endpoint(
+            &self.jina.arxiv_html_url_prefix,
+            "jina.arxiv_html_url_prefix",
+        )?;
+        validation::endpoint(
+            &self.direct_fetch.npm_registry_url_prefix,
+            "direct_fetch.npm_registry_url_prefix",
+        )?;
+        validation::template_endpoint(
+            &self.direct_fetch.stack_overflow_api_url_template,
+            "direct_fetch.stack_overflow_api_url_template",
+            "{question_id}",
+        )?;
+        validation::path_prefix(
+            &self.direct_fetch.wikimedia_api_path,
+            "direct_fetch.wikimedia_api_path",
+        )?;
         Ok(())
     }
-}
-fn positive<T>(value: &T, path: &str) -> Result<()>
-where
-    T: PartialOrd + From<u8>,
-{
-    if value > &T::from(0_u8) {
-        return Ok(());
-    }
-    Err(AppError::config(format!("{path} must be positive")))
-}
-fn positive_float(value: f64, path: &str) -> Result<()> {
-    if value.is_finite() && value > 0.0_f64 {
-        return Ok(());
-    }
-    Err(AppError::config(format!("{path} must be positive")))
-}
-fn parse_endpoint(value: &str, path: &str) -> Result<()> {
-    let url = Url::parse(value).map_err(|error| AppError::config(format!("{path}: {error}")))?;
-    if matches!(url.scheme(), "http" | "https") && url.host_str().is_some() {
-        return Ok(());
-    }
-    Err(AppError::config(format!(
-        "{path} must be an absolute HTTP or HTTPS URL"
-    )))
 }

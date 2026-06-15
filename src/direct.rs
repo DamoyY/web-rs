@@ -1,4 +1,5 @@
 pub mod code_hosts;
+pub mod content;
 pub mod fetch;
 pub mod mediawiki;
 pub mod package;
@@ -17,7 +18,7 @@ pub fn resolve_direct_fetch_target(
 ) -> Option<DirectFetchTarget> {
     let parsed = url::Url::parse(url).ok()?;
     let host = parsed.host_str()?.to_ascii_lowercase();
-    if host == "learn.microsoft.com" {
+    if contains(&config.microsoft_learn_hosts, &host) {
         return Some(DirectFetchTarget::text(
             url,
             microsoft_learn_markdown_url(&parsed),
@@ -26,17 +27,17 @@ pub fn resolve_direct_fetch_target(
     if let Some(raw_url) = code_hosts::resolve_code_host_raw_url(&parsed, &host, config) {
         return Some(DirectFetchTarget::text(url, raw_url));
     }
-    if let Some(api_url) = stack_overflow::resolve_stack_overflow_api_url(&parsed) {
+    if let Some(api_url) = stack_overflow::resolve_stack_overflow_api_url(&parsed, config) {
         return Some(DirectFetchTarget::stack_overflow_question(url, api_url));
     }
-    if let Some(registry) = package::resolve_package_registry_target(&parsed) {
+    if let Some(registry) = package::resolve_package_registry_target(&parsed, config) {
         return Some(DirectFetchTarget::package(
             url,
             registry.request_url,
             registry.json_fields_last,
         ));
     }
-    mediawiki::resolve_mediawiki_api_url(&parsed)
+    mediawiki::resolve_mediawiki_api_url(&parsed, config)
         .map(|request_url| DirectFetchTarget::mediawiki(url, request_url))
 }
 #[expect(
@@ -61,4 +62,9 @@ fn microsoft_learn_markdown_url(parsed: &url::Url) -> String {
     let mut next = parsed.clone();
     next.query_pairs_mut().clear().extend_pairs(pairs);
     next.to_string()
+}
+fn contains(values: &[String], value: &str) -> bool {
+    values
+        .iter()
+        .any(|configured| configured.eq_ignore_ascii_case(value))
 }

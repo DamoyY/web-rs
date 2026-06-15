@@ -171,7 +171,7 @@ http://<host>:18080/mcp
 
 `open` 与 `find` 在抓取前会优先尝试直连，命中以下规则时直接取原始内容，通常无需 Jina API key：
 
-- 代码托管：GitHub（含 `raw.githubusercontent.com`、Gist）、GitLab、Bitbucket、Hugging Face 的 `blob`/`raw`/`resolve` 链接，会被换算成原始文件地址，仅对可识别的文本类扩展名生效。
+- 代码托管：GitHub（含 `raw.githubusercontent.com`、Gist）、GitLab、Bitbucket、Hugging Face 的 `blob`/`raw`/`resolve` 链接，会被换算成原始文件地址，并拒绝二进制响应。
 - Stack Overflow：问题页会通过 Stack Exchange API 直连读取，返回 `question` 与 `answers` 组成的 JSON。
 - 包仓库：PyPI（`pypi.org/project/...` 等）、npm（`npmjs.com/package/...`、`registry.npmjs.org/...`）、crates.io，会取仓库 JSON 并做字段整理。
 - 维基类站点：Wikipedia 等 Wikimedia 站点以及 `*.fandom.com`，会通过其 API 取单页内容，支持按标题、`oldid`、`curid` 等定位。
@@ -196,14 +196,14 @@ http://<host>:18080/mcp
 
 服务的默认配置见 `config/default.yaml`，主要分组如下：
 
-- `server`：监听地址与端口、`/mcp` 与 `/health` 路径、协议版本、有/无状态模式、JSON 响应开关、Host/Origin 允许列表、日志级别。
+- `server`：监听地址与端口、协议版本、有/无状态模式、JSON 响应开关、Host/Origin 允许列表、日志级别。
 - `headers`：Exa 与 Jina 的密钥头名称（`x-exa-api-key`、`x-jina-api-key`）。
 - `search`：Exa 端点、返回条数（默认 15）、搜索类型（`deep-lite`）、高亮字符上限、缓存与实时抓取超时。
-- `http`：Jina/Exa 超时（默认 120s）、直连抓取超时（默认 20s）、最大重定向次数（默认 5）。
-- `jina`：Jina Reader 端点与渲染引擎、返回格式、视口等参数。
+- `http`：出站请求的 User-Agent、Jina/Exa 超时（默认 120s）、直连抓取超时（默认 20s）、最大重定向次数（默认 5）。
+- `jina`：Jina Reader 端点与渲染引擎、返回格式、arXiv PDF/HTML 链接前缀、视口等参数。
 - `chunking`：分词器（`o200k_base`）、单块 token 上限（默认 5000）、重叠比例（默认 0.1）。
 - `find`：默认片段 token（200）、单页最大命中数（50）。
-- `direct_fetch`：直连内容大小上限、各代码托管站点的主机列表、可直连的文本扩展名与文件名。
+- `direct_fetch`：直连内容大小上限、相似度阈值、各代码托管站点与特殊站点的主机/域名列表。
 - `ssrf`：是否拦截私有网络与本地主机名。
 
 日志级别可通过环境变量 `RUST_LOG` 覆盖，未设置时使用 `info`。

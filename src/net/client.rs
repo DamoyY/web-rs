@@ -1,5 +1,5 @@
 use crate::{
-    HTTP_USER_AGENT, Result,
+    Result,
     error::AppError,
     net::{SsrfGuard, resolver::GuardedResolver},
 };
@@ -15,6 +15,7 @@ pub struct SecureHttpClient {
     client: reqwest::Client,
     guard: SsrfGuard,
     max_redirects: usize,
+    user_agent: HeaderValue,
 }
 #[derive(Debug)]
 pub struct FetchResponse {
@@ -24,19 +25,28 @@ pub struct FetchResponse {
 }
 impl SecureHttpClient {
     #[inline]
-    #[must_use]
-    pub fn new(max_redirects: usize, guard: SsrfGuard) -> Self {
+    pub fn new(max_redirects: usize, user_agent: &str, guard: SsrfGuard) -> Result<Self> {
+        let user_agent_header = HeaderValue::from_str(user_agent)
+            .map_err(|error| AppError::config(format!("http.user_agent: {error}")))?;
         let client = reqwest::Client::builder()
             .dns_resolver(Arc::new(GuardedResolver::new(guard.clone())))
             .redirect(Policy::none())
-            .user_agent(HTTP_USER_AGENT)
+            .user_agent(user_agent_header.clone())
             .build()
-            .unwrap_or_else(|error| panic!("failed to build guarded HTTP client: {error}"));
-        Self {
+            .map_err(|error| {
+                AppError::internal(format!("failed to build guarded HTTP client: {error}"))
+            })?;
+        Ok(Self {
             client,
             guard,
             max_redirects,
-        }
+            user_agent: user_agent_header,
+        })
+    }
+    #[inline]
+    #[must_use]
+    pub fn user_agent(&self) -> HeaderValue {
+        self.user_agent.clone()
     }
     #[expect(
         clippy::missing_inline_in_public_items,

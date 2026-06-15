@@ -5,8 +5,6 @@ server:
   host: 0.0.0.0 # Bind address.
   port: 18080 # Bind port.
   log_level: info # Trace log level.
-  streamable_http_path: /mcp # MCP HTTP endpoint.
-  health_path: /health # Health-check endpoint.
   protocol_version: "2025-06-18" # MCP protocol version.
   stateful_http: false # RMCP Streamable HTTP session mode.
   json_response: true # Return JSON directly instead of SSE for stateless requests.
@@ -29,6 +27,7 @@ search:
 
 # HTTP client behavior for all outbound requests.
 http:
+  user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 # User-Agent for outbound HTTP requests.
   timeout_seconds: 120.0 # Jina and Exa timeout.
   direct_fetch_timeout_seconds: 20.0 # Direct fetch timeout.
   max_redirects: 5 # Redirect hops after per-hop SSRF validation.
@@ -44,6 +43,8 @@ jina:
   respond_with: readerlm-v2 # Jina response strategy.
   retain_images: none # Image retention policy.
   with_shadow_dom: true # Include shadow DOM while rendering.
+  arxiv_pdf_url_prefix: https://arxiv.org/pdf/ # arXiv PDF URL prefix rewritten before Reader fallback.
+  arxiv_html_url_prefix: https://arxiv.org/html/ # arXiv HTML URL prefix used before Reader fallback.
   viewport:
     width: 1920 # Browser viewport width.
     height: 1080 # Browser viewport height.
@@ -62,6 +63,7 @@ find:
 # Direct fetch behavior before falling back to Jina.
 direct_fetch:
   max_bytes: 1048576 # Maximum accepted direct response bytes.
+  similarity_threshold: 0.9 # Reject generated Markdown URLs when their content is at least this similar to a random missing-URL probe.
   github_hosts: # GitHub-style hosts.
     - github.com
     - raw.githubusercontent.com
@@ -72,48 +74,32 @@ direct_fetch:
     - gitlab.com
   bitbucket_hosts: # Bitbucket-style hosts.
     - bitbucket.org
-  text_file_extensions: # Extensions eligible for raw text fetch.
-    - .txt
-    - .md
-    - .rst
-    - .py
-    - .pyi
-    - .js
-    - .jsx
-    - .ts
-    - .tsx
-    - .json
-    - .yaml
-    - .yml
-    - .toml
-    - .ini
-    - .cfg
-    - .xml
-    - .html
-    - .css
-    - .scss
-    - .go
-    - .rs
-    - .java
-    - .kt
-    - .c
-    - .h
-    - .cpp
-    - .hpp
-    - .cs
-    - .php
-    - .rb
-    - .sh
-    - .ps1
-    - .sql
-    - .dockerfile
-    - .env
-  text_file_names: # Extensionless file names eligible for raw text fetch.
-    - README
-    - LICENSE
-    - NOTICE
-    - Dockerfile
-    - Makefile
+  microsoft_learn_hosts: # Microsoft Learn hosts that expose Markdown with an accept query parameter.
+    - learn.microsoft.com
+  stack_overflow_hosts: # Stack Overflow hosts handled through Stack Exchange API.
+    - stackoverflow.com
+    - www.stackoverflow.com
+  stack_overflow_api_url_template: https://api.stackexchange.com/2.3/questions/{question_id} # Stack Exchange question API URL template.
+  npm_hosts: # npm package hosts handled through registry JSON.
+    - npmjs.com
+    - www.npmjs.com
+    - registry.npmjs.org
+  npm_registry_url_prefix: https://registry.npmjs.org/ # npm registry JSON URL prefix.
+  wikimedia_domains: # Wikimedia project domains handled through MediaWiki API.
+    - mediawiki.org
+    - wikibooks.org
+    - wikidata.org
+    - wikifunctions.org
+    - wikimedia.org
+    - wikinews.org
+    - wikipedia.org
+    - wikiquote.org
+    - wikisource.org
+    - wikispecies.org
+    - wikiversity.org
+    - wikivoyage.org
+    - wiktionary.org
+  wikimedia_api_path: /w/api.php # Wikimedia MediaWiki API path.
 
 # SSRF defenses for user-controlled URLs and redirects.
 ssrf:

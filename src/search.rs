@@ -1,9 +1,8 @@
 pub mod exa;
 pub type ExaSearchClient = exa::ExaSearchClient;
-use crate::config::AppConfig;
-#[must_use]
+use crate::{Result, config::AppConfig};
 #[inline]
-pub(crate) fn client(config: &AppConfig) -> ExaSearchClient {
+pub(crate) fn client(config: &AppConfig) -> Result<ExaSearchClient> {
     ExaSearchClient::new(config)
 }
 #[must_use]

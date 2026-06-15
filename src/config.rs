@@ -2,6 +2,7 @@ mod embedded;
 #[cfg(test)]
 mod tests;
 pub mod types;
+mod validation;
 use crate::Result;
 pub type AppConfig = types::AppConfig;
 pub type ChunkingConfig = types::ChunkingConfig;

@@ -1,3 +1,4 @@
+use crate::config::DirectFetchConfig;
 use percent_encoding::percent_decode_str;
 use sonic_rs::JsonContainerTrait as _;
 use url::Url;
@@ -8,7 +9,10 @@ pub struct PackageRegistryTarget {
 }
 #[inline]
 #[must_use]
-pub fn resolve_package_registry_target(parsed: &Url) -> Option<PackageRegistryTarget> {
+pub fn resolve_package_registry_target(
+    parsed: &Url,
+    config: &DirectFetchConfig,
+) -> Option<PackageRegistryTarget> {
     let host = parsed.host_str()?.to_ascii_lowercase();
     let parts = path_parts(parsed);
     if host == "pypi.org" {
@@ -17,12 +21,9 @@ pub fn resolve_package_registry_target(parsed: &Url) -> Option<PackageRegistryTa
             json_fields_last: vec!["releases".to_owned()],
         });
     }
-    if matches!(
-        host.as_str(),
-        "npmjs.com" | "www.npmjs.com" | "registry.npmjs.org"
-    ) {
+    if contains(&config.npm_hosts, &host) {
         return npm_name(&host, &parts).map(|name| PackageRegistryTarget {
-            request_url: format!("https://registry.npmjs.org/{}", npm_encode(&name)),
+            request_url: format!("{}{}", config.npm_registry_url_prefix, npm_encode(&name)),
             json_fields_last: vec!["versions".to_owned()],
         });
     }
@@ -75,14 +76,14 @@ fn pypi_name(parts: &[String]) -> Option<String> {
     None
 }
 fn npm_name(host: &str, parts: &[String]) -> Option<String> {
-    let package_parts = if matches!(host, "npmjs.com" | "www.npmjs.com") {
+    let package_parts = if host.starts_with("registry.") {
+        parts
+    } else {
         let (section, package_parts) = parts.split_first()?;
         if section != "package" || package_parts.is_empty() {
             return None;
         }
         package_parts
-    } else {
-        parts
     };
     let decoded: Vec<String> = package_parts.iter().map(|part| decode(part)).collect();
     let name_parts: Vec<String> = if decoded.len() == 1 {
@@ -145,4 +146,9 @@ fn path_parts(parsed: &Url) -> Vec<String> {
 }
 fn npm_encode(value: &str) -> String {
     urlencoding::encode(value).replace("%40", "@")
+}
+fn contains(values: &[String], value: &str) -> bool {
+    values
+        .iter()
+        .any(|configured| configured.eq_ignore_ascii_case(value))
 }

@@ -1,27 +1,15 @@
-use crate::{Result, error::AppError};
+use crate::{Result, config::DirectFetchConfig, error::AppError};
 use sonic_rs::{JsonContainerTrait as _, JsonValueTrait as _, Value};
 use url::Url;
-const WIKIMEDIA_DOMAINS: &[&str] = &[
-    "mediawiki.org",
-    "wikibooks.org",
-    "wikidata.org",
-    "wikifunctions.org",
-    "wikimedia.org",
-    "wikinews.org",
-    "wikipedia.org",
-    "wikiquote.org",
-    "wikisource.org",
-    "wikispecies.org",
-    "wikiversity.org",
-    "wikivoyage.org",
-    "wiktionary.org",
-];
 #[must_use]
 #[inline]
-pub fn resolve_mediawiki_api_url(parsed: &Url) -> Option<String> {
+pub fn resolve_mediawiki_api_url(parsed: &Url, config: &DirectFetchConfig) -> Option<String> {
     let host = parsed.host_str()?.to_ascii_lowercase();
-    let (selector, api_path) = if is_wikimedia_host(&host) {
-        (wikimedia_selector(parsed)?, "/w/api.php".to_owned())
+    let (selector, api_path) = if is_wikimedia_host(&host, &config.wikimedia_domains) {
+        (
+            wikimedia_selector(parsed)?,
+            config.wikimedia_api_path.clone(),
+        )
     } else if is_fandom_host(&host) {
         fandom_selector_and_api_path(parsed)?
     } else {
@@ -170,10 +158,10 @@ fn first_query_value(parsed: &Url, name: &str) -> Option<String> {
         .find(|pair| pair.0.as_ref() == name)
         .map(|(_, value)| value.into_owned())
 }
-fn is_wikimedia_host(host: &str) -> bool {
-    WIKIMEDIA_DOMAINS
+fn is_wikimedia_host(host: &str, domains: &[String]) -> bool {
+    domains
         .iter()
-        .any(|domain| host == *domain || host.ends_with(&format!(".{domain}")))
+        .any(|domain| host == domain || host.ends_with(&format!(".{domain}")))
 }
 fn is_fandom_host(host: &str) -> bool {
     host != "www.fandom.com" && host.ends_with(".fandom.com")

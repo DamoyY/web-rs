@@ -23,8 +23,8 @@ impl ToolService {
     pub fn new(config: AppConfig) -> Result<Self> {
         Ok(Self {
             chunker: TokenChunker::new(&config.chunking)?,
-            page_fetcher: PageFetcher::new(config.clone()),
-            search: crate::search::client(&config),
+            page_fetcher: PageFetcher::new(config.clone())?,
+            search: crate::search::client(&config)?,
             config,
         })
     }

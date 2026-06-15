@@ -32,7 +32,7 @@ impl JinaReaderClient {
     pub async fn read_markdown(&self, url: &str, api_key: &str) -> Result<String> {
         let headers = self.headers(api_key)?;
         let payload = JinaPayload {
-            url: rewrite_arxiv_pdf_url(url),
+            url: rewrite_arxiv_pdf_url(url, &self.config),
             viewport: &self.config.jina.viewport,
         };
         let body = sonic_rs::to_vec(&payload).map_err(|error| {
@@ -164,11 +164,12 @@ fn insert_header(headers: &mut HeaderMap, name: &'static str, value: &str) -> Re
 const fn header_bool(value: bool) -> &'static str {
     if value { "true" } else { "false" }
 }
-fn rewrite_arxiv_pdf_url(url: &str) -> String {
-    url.strip_prefix("https://arxiv.org/pdf/").map_or_else(
-        || url.to_owned(),
-        |suffix| format!("https://arxiv.org/html/{suffix}"),
-    )
+fn rewrite_arxiv_pdf_url(url: &str, config: &AppConfig) -> String {
+    url.strip_prefix(&config.jina.arxiv_pdf_url_prefix)
+        .map_or_else(
+            || url.to_owned(),
+            |suffix| format!("{}{suffix}", config.jina.arxiv_html_url_prefix),
+        )
 }
 #[expect(
     clippy::needless_pass_by_value,

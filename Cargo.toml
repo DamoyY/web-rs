@@ -7,12 +7,14 @@ edition = "2024"
 anyhow = "*"
 axum = { version = "*", features = ["macros"] }
 chrono = { version = "*", default-features = false, features = ["clock", "std"] }
+content_inspector = "*"
 fancy-regex = "*"
 futures = "*"
 http = "*"
 mimalloc = { version = "*", features = ["v3"] }
 num-traits = "*"
 percent-encoding = "*"
+rand = "*"
 reqwest = { version = "*", default-features = false, features = ["deflate", "gzip", "json", "rustls-tls"] }
 rmcp = { version = "*", features = ["macros", "schemars", "server", "transport-streamable-http-server"] }
 schemars = { version = "*", features = ["derive"] }

@@ -1,4 +1,4 @@
-use crate::{Result, error::AppError};
+use crate::{Result, config::DirectFetchConfig, error::AppError};
 use serde::Serialize;
 use sonic_rs::{JsonContainerTrait as _, JsonValueTrait as _, Object, Value};
 use url::Url;
@@ -11,15 +11,17 @@ struct QuestionAndAnswers {
 }
 #[must_use]
 #[inline]
-pub fn resolve_stack_overflow_api_url(parsed: &Url) -> Option<String> {
+pub fn resolve_stack_overflow_api_url(parsed: &Url, config: &DirectFetchConfig) -> Option<String> {
     let host = parsed.host_str()?.to_ascii_lowercase();
-    if !matches!(host.as_str(), "stackoverflow.com" | "www.stackoverflow.com") {
+    if !contains(&config.stack_overflow_hosts, &host) {
         return None;
     }
     let question_id = question_id(parsed)?;
-    let mut api = Url::parse(&format!(
-        "https://api.stackexchange.com/2.3/questions/{question_id}"
-    ))
+    let mut api = Url::parse(
+        &config
+            .stack_overflow_api_url_template
+            .replace(concat!("{", "question_id", "}"), &question_id.to_string()),
+    )
     .ok()?;
     api.query_pairs_mut()
         .append_pair("order", "desc")
@@ -126,4 +128,9 @@ fn api_error_message(payload: &Value) -> Option<String> {
     Some(format!(
         "Stack Exchange API rejected the question request ({error_name}/{error_id}): {error_message}"
     ))
+}
+fn contains(values: &[String], value: &str) -> bool {
+    values
+        .iter()
+        .any(|configured| configured.eq_ignore_ascii_case(value))
 }

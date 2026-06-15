@@ -8,7 +8,6 @@ use crate::{
 };
 use tracing::warn;
 use url::Url;
-const MISSING_MARKDOWN_SUFFIX: &str = ".af97t23bf86rq";
 #[cfg(test)]
 mod tests;
 #[derive(Clone, Debug)]
@@ -35,17 +34,16 @@ pub struct PageFetcher {
 }
 impl PageFetcher {
     #[inline]
-    #[must_use]
-    pub fn new(config: AppConfig) -> Self {
-        let http = secure_client_from_config(&config);
+    pub fn new(config: AppConfig) -> Result<Self> {
+        let http = secure_client_from_config(&config)?;
         let guard = guard(&config.ssrf);
         let jina = JinaReaderClient::new(config.clone(), http.clone());
-        Self {
+        Ok(Self {
             config,
             http,
             guard,
             jina,
-        }
+        })
     }
     #[expect(
         clippy::missing_inline_in_public_items,
@@ -55,7 +53,8 @@ impl PageFetcher {
         let parsed =
             Url::parse(url).map_err(|error| AppError::client(format!("Invalid URL: {error}")))?;
         self.guard.validate_url(&parsed).await?;
-        for target in direct_fetch_targets(url, &self.config.direct_fetch) {
+        let targets = direct_fetch_targets(url, &self.config.direct_fetch);
+        for target in targets {
             match fetch_direct_text(
                 &self.http,
                 &target,
@@ -113,7 +112,7 @@ fn markdown_accept_target(url: &str) -> DirectFetchTarget {
 fn markdown_direct_fetch_target(url: &str) -> DirectFetchTarget {
     let mut target = DirectFetchTarget::text(url, replace_path_suffix(url, ".md"));
     target.required_content_type = Some("text/markdown".to_owned());
-    target.similarity_probe_url = Some(replace_path_suffix(url, MISSING_MARKDOWN_SUFFIX));
+    target.similarity_probe_url = Some(replace_path_suffix(url, &random_missing_suffix()));
     target
 }
 fn replace_path_suffix(url: &str, suffix: &str) -> String {
@@ -128,4 +127,8 @@ fn replace_path_suffix(url: &str, suffix: &str) -> String {
     };
     parsed.set_path(&next_path);
     parsed.to_string()
+}
+fn random_missing_suffix() -> String {
+    let value: u128 = rand::random();
+    format!(".{value:032x}")
 }
