@@ -1,14 +1,11 @@
 param(
     [string] $SshHost = "Fro",
-    [string] $Target = "x86_64-unknown-linux-gnu",
-    [string] $BinaryPath = $null
+    [string] $Target = "x86_64-unknown-linux-gnu"
 )
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 $projectRoot = Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")
-if ($null -eq $BinaryPath) {
-    $BinaryPath = Join-Path $projectRoot.Path ("target\{0}\release\web-rs" -f $Target)
-}
+$BinaryPath = Join-Path $projectRoot.Path ("target\{0}\release\web-rs" -f $Target)
 & cargo zigbuild --release --target $Target --manifest-path (Join-Path $projectRoot.Path "Cargo.toml")
 if ($LASTEXITCODE -ne 0) {
     throw "cargo build failed with exit code $LASTEXITCODE"
