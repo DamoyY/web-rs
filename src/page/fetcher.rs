@@ -9,6 +9,8 @@ use crate::{
 use tracing::warn;
 use url::Url;
 const MISSING_MARKDOWN_SUFFIX: &str = ".af97t23bf86rq";
+#[cfg(test)]
+mod tests;
 #[derive(Clone, Debug)]
 pub struct PageContent {
     pub url: String,
@@ -110,6 +112,7 @@ fn markdown_accept_target(url: &str) -> DirectFetchTarget {
 }
 fn markdown_direct_fetch_target(url: &str) -> DirectFetchTarget {
     let mut target = DirectFetchTarget::text(url, replace_path_suffix(url, ".md"));
+    target.required_content_type = Some("text/markdown".to_owned());
     target.similarity_probe_url = Some(replace_path_suffix(url, MISSING_MARKDOWN_SUFFIX));
     target
 }

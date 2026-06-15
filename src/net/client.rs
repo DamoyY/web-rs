@@ -1,5 +1,5 @@
 use crate::{
-    Result,
+    HTTP_USER_AGENT, Result,
     error::AppError,
     net::{SsrfGuard, resolver::GuardedResolver},
 };
@@ -29,6 +29,7 @@ impl SecureHttpClient {
         let client = reqwest::Client::builder()
             .dns_resolver(Arc::new(GuardedResolver::new(guard.clone())))
             .redirect(Policy::none())
+            .user_agent(HTTP_USER_AGENT)
             .build()
             .unwrap_or_else(|error| panic!("failed to build guarded HTTP client: {error}"));
         Self {

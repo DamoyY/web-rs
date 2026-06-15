@@ -1,5 +1,5 @@
 use crate::{
-    Result, VERSION,
+    HTTP_USER_AGENT, Result,
     config::{DirectFetchConfig, HttpConfig},
     direct::{
         mediawiki::extract_mediawiki_content,
@@ -61,10 +61,7 @@ fn request_headers(target: &DirectFetchTarget, config: &DirectFetchConfig) -> Re
         RANGE,
         HeaderValue::from_str(&format!("bytes=0-{}", config.max_bytes)).map_err(header_error)?,
     );
-    headers.insert(
-        USER_AGENT,
-        HeaderValue::from_str(&format!("web-mcp/{VERSION}")).map_err(header_error)?,
-    );
+    headers.insert(USER_AGENT, HeaderValue::from_static(HTTP_USER_AGENT));
     Ok(headers)
 }
 fn extract_content(
