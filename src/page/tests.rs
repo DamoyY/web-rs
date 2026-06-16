@@ -45,10 +45,10 @@ fn open_out_of_range_chunk_uses_first_chunk() -> Result<()> {
     };
     let mut warnings = Vec::new();
     let opened: OpenPage = open_page_chunk(&page, 2, 0, &chunker, &mut warnings)?;
-    assert_eq!(opened.chunk, 1);
+    assert_eq!(opened.chunk, 0);
     assert_eq!(
         warnings,
-        ["\"requests[0].chunk\" must be between 1 and 1; using 1"]
+        ["\"requests[0].chunk\" must be between 0 and 0; using 0"]
     );
     Ok(())
 }

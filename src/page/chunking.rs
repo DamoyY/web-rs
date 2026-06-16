@@ -36,7 +36,7 @@ impl TokenChunker {
         let tokens = self.encoder.encode(text);
         if tokens.len() <= self.chunk_tokens {
             return Ok(vec![TextChunk {
-                index: 1,
+                index: 0,
                 content: text.to_owned(),
             }]);
         }
@@ -49,7 +49,7 @@ impl TokenChunker {
                 AppError::internal("token chunk range was outside tokenizer output")
             })?;
             chunks.push(TextChunk {
-                index: chunks.len() + 1,
+                index: chunks.len(),
                 content: self.decode(token_window)?,
             });
             if end == tokens.len() {

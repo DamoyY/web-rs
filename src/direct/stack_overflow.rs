@@ -6,8 +6,13 @@ const API_FILTER: &str = "W-vZ8WEHVi3D2JhQe1m8l90EjOxo6eCsb6b_6yfX0_p";
 const MAX_ANSWERS_PER_REQUEST: &str = "100";
 #[derive(Serialize)]
 struct QuestionAndAnswers {
-    question: Object,
-    answers: Vec<Object>,
+    question: Question,
+    answers: Vec<String>,
+}
+#[derive(Serialize)]
+struct Question {
+    title: String,
+    body: String,
 }
 #[must_use]
 #[inline]
@@ -51,8 +56,11 @@ pub fn format_stack_overflow_question_json(payload: &Value) -> Result<String> {
         AppError::client("Stack Exchange API returned an invalid question object.")
     })?;
     let output = QuestionAndAnswers {
-        question: stripped_object(question_object, &["answers", "comments", "comment_count"]),
-        answers: answer_objects(question_object)?,
+        question: Question {
+            title: string_field(question_object, "title")?,
+            body: string_field(question_object, "body_markdown")?,
+        },
+        answers: answer_bodies(question_object)?,
     };
     sonic_rs::to_string_pretty(&output).map_err(|error| {
         AppError::internal(format!("failed to serialize Stack Overflow JSON: {error}"))
@@ -89,7 +97,16 @@ fn single_question_item(payload: &Value) -> Result<&Value> {
         .first()
         .ok_or_else(|| AppError::client("Stack Exchange API did not return exactly one question."))
 }
-fn answer_objects(question: &Object) -> Result<Vec<Object>> {
+fn string_field(object: &Object, key: &str) -> Result<String> {
+    object
+        .get(&key)
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| {
+            AppError::client(format!("Stack Exchange API question is missing \"{key}\"."))
+        })
+}
+fn answer_bodies(question: &Object) -> Result<Vec<String>> {
     let Some(answers) = question.get(&"answers") else {
         return Ok(Vec::new());
     };
@@ -101,19 +118,12 @@ fn answer_objects(question: &Object) -> Result<Vec<Object>> {
         .map(|answer| {
             answer
                 .as_object()
-                .map(|object| stripped_object(object, &["comments", "comment_count"]))
+                .and_then(|object| object.get(&"body_markdown"))
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned)
                 .ok_or_else(|| AppError::client("Stack Exchange API returned an invalid answer."))
         })
         .collect()
-}
-fn stripped_object(object: &Object, excluded: &[&str]) -> Object {
-    let mut stripped = Object::with_capacity(object.len());
-    for (key, value) in object {
-        if !excluded.contains(&key) {
-            stripped.insert(key, value.clone());
-        }
-    }
-    stripped
 }
 fn api_error_message(payload: &Value) -> Option<String> {
     let error_id = payload.get("error_id").and_then(Value::as_i64)?;

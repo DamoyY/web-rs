@@ -16,17 +16,17 @@ pub fn open_page_chunk(
     warnings: &mut Vec<String>,
 ) -> Result<OpenPage> {
     let chunks = chunker.split(&page.markdown)?;
-    let selected = if chunk_index == 0 || chunk_index > chunks.len() {
+    let selected = if chunk_index >= chunks.len() {
         warnings.push(format!(
-            "\"requests[{request_index}].chunk\" must be between 1 and {}; using 1",
-            chunks.len()
+            "\"requests[{request_index}].chunk\" must be between 0 and {}; using 0",
+            chunks.len().saturating_sub(1)
         ));
         chunks
             .first()
             .ok_or_else(|| AppError::internal("page split produced no chunks"))?
     } else {
         chunks
-            .get(chunk_index - 1)
+            .get(chunk_index)
             .ok_or_else(|| AppError::internal("validated page chunk was missing"))?
     };
     Ok(OpenPage {

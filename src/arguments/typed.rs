@@ -67,18 +67,18 @@ fn normalize_open_chunks(maps: &mut [RequestMap], warnings: &mut Vec<String>) {
         let path = format!("requests[{index}].chunk");
         match map.get("chunk") {
             None => {
-                map.insert("chunk".to_owned(), Value::from(1_u64));
-                push_unique(warnings, format!("\"{path}\" is required; using 1"));
+                map.insert("chunk".to_owned(), Value::from(0_u64));
+                push_unique(warnings, format!("\"{path}\" is required; using 0"));
             }
             Some(value) if is_empty(value) => {
-                map.insert("chunk".to_owned(), Value::from(1_u64));
-                push_unique(warnings, format!("\"{path}\" is empty; using 1"));
+                map.insert("chunk".to_owned(), Value::from(0_u64));
+                push_unique(warnings, format!("\"{path}\" is empty; using 0"));
             }
-            Some(value) if integer_value(value).is_some_and(|number| number < 1) => {
-                map.insert("chunk".to_owned(), Value::from(1_u64));
+            Some(value) if integer_value(value).is_some_and(|number| number < 0) => {
+                map.insert("chunk".to_owned(), Value::from(0_u64));
                 push_unique(
                     warnings,
-                    format!("\"{path}\" must be greater than or equal to 1; using 1"),
+                    format!("\"{path}\" must be greater than or equal to 0; using 0"),
                 );
             }
             Some(_) => {}
@@ -112,7 +112,7 @@ fn required_usize(map: &RequestMap, field: &str, path: &str) -> Result<usize> {
     let value = map
         .get(field)
         .ok_or_else(|| validation(format!("{path} is required")))?;
-    positive_usize(value, path)
+    non_negative_usize(value, path)
 }
 fn optional_usize(map: &RequestMap, field: &str, path: &str) -> Result<Option<usize>> {
     let Some(value) = map.get(field) else {
@@ -159,6 +159,17 @@ fn positive_usize(value: &Value, path: &str) -> Result<usize> {
     if number < 1 {
         return Err(validation(format!(
             "{path} must be greater than or equal to 1"
+        )));
+    }
+    usize::try_from(number).map_err(|_overflow| validation(format!("{path} is too large")))
+}
+fn non_negative_usize(value: &Value, path: &str) -> Result<usize> {
+    let Some(number) = integer_value(value) else {
+        return Err(validation(format!("{path} must be an integer")));
+    };
+    if number < 0 {
+        return Err(validation(format!(
+            "{path} must be greater than or equal to 0"
         )));
     }
     usize::try_from(number).map_err(|_overflow| validation(format!("{path} is too large")))

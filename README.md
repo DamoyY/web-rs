@@ -87,14 +87,14 @@ http://<host>:18080/mcp
 请求参数：
 
 - `url`：必填，绝对的 HTTP/HTTPS URL。
-- `chunk`：要返回的分块序号，从 1 开始；缺省、为空或小于 1 时按 1 处理。
+- `chunk`：要返回的分块序号，从 0 开始；缺省、为空或小于 0 时按 0 处理。
 
 请求示例：
 
 ```json
 {
   "requests": [
-    { "url": "https://example.com/article", "chunk": 1 }
+    { "url": "https://example.com/article", "chunk": 0 }
   ]
 }
 ```
@@ -105,7 +105,7 @@ http://<host>:18080/mcp
 {
   "pages": [
     {
-      "chunk": 1,
+      "chunk": 0,
       "total_chunks": 3,
       "content": "该分块的正文内容"
     }
@@ -114,7 +114,7 @@ http://<host>:18080/mcp
 }
 ```
 
-正文会先转换为 Markdown，再按 token 切分（默认每块 5000 token，相邻块间约 10% 重叠）。短页面通常只有一个分块（`total_chunks` 为 1）。当请求的 `chunk` 超出范围时，会返回第 1 块并在 `warning` 中给出可用范围提示。先用 `total_chunks` 了解页面被切成了几块，再按需逐块翻阅。
+正文会先转换为 Markdown，再按 token 切分（默认每块 5000 token，相邻块间约 10% 重叠）。短页面通常只有一个分块（`total_chunks` 为 1）。当请求的 `chunk` 超出范围时，会返回首块（序号 0）并在 `warning` 中给出可用范围提示。先用 `total_chunks` 了解页面被切成了几块，再按需逐块翻阅。
 
 ## 工具：find
 
@@ -144,7 +144,7 @@ http://<host>:18080/mcp
     {
       "total_chunks": 3,
       "matches": [
-        { "chunk": 1, "snippet": "命中处及其上下文" }
+        { "chunk": 0, "snippet": "命中处及其上下文" }
       ]
     }
   ],
