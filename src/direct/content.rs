@@ -10,7 +10,7 @@ use crate::{
     error::{AppError, http_service_error},
 };
 use reqwest::header::{CONTENT_TYPE, HeaderMap};
-use sonic_rs::Value;
+use sonic_rs::{JsonValueMutTrait as _, JsonValueTrait as _, Value};
 #[expect(
     clippy::missing_inline_in_public_items,
     reason = "Direct content extraction can parse and reserialize response bodies."
@@ -58,12 +58,30 @@ fn ensure_text_content(target: &DirectFetchTarget, body: &[u8]) -> Result<()> {
     Err(AppError::client("Direct fetch returned binary content."))
 }
 fn json_payload(body: &[u8], format: ResponseFormat) -> Result<Value> {
-    sonic_rs::from_slice(body).map_err(|_error| {
+    let mut payload: Value = sonic_rs::from_slice(body).map_err(|_error| {
         AppError::client(format!(
             "{} returned malformed JSON.",
             json_service_name(format)
         ))
-    })
+    })?;
+    normalize_crlf(&mut payload);
+    Ok(payload)
+}
+fn normalize_crlf(value: &mut Value) {
+    if let Some(text) = value.as_str() {
+        if text.contains('\r') {
+            let normalized = text.replace("\r\n", "\n");
+            *value = Value::from(normalized.as_str());
+        }
+    } else if let Some(array) = value.as_array_mut() {
+        for item in array.as_mut_slice() {
+            normalize_crlf(item);
+        }
+    } else if let Some(object) = value.as_object_mut() {
+        for (_, item) in object.iter_mut() {
+            normalize_crlf(item);
+        }
+    }
 }
 fn ensure_required_content_type(target: &DirectFetchTarget, headers: &HeaderMap) -> Result<()> {
     let Some(expected) = target.required_content_type.as_deref() else {

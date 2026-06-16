@@ -1,10 +1,11 @@
 use crate::{
     Result, config,
     direct::{
-        ResponseFormat, resolve_direct_fetch_target,
+        DirectFetchTarget, ResponseFormat, content::extract_content, resolve_direct_fetch_target,
         stack_overflow::format_stack_overflow_question_json,
     },
 };
+use reqwest::header::HeaderMap;
 #[test]
 #[expect(
     clippy::panic_in_result_fn,
@@ -99,5 +100,22 @@ fn stack_overflow_json_starts_with_question_then_answers_without_comments() -> R
     assert!(formatted.starts_with("{\n  \"question\""));
     assert!(formatted.contains("\"answers\""));
     assert!(!formatted.contains("comment"));
+    Ok(())
+}
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The test uses assertions while Result keeps setup failures readable."
+)]
+fn json_crlf_line_endings_are_normalized_to_lf() -> Result<()> {
+    let config = config::load_embedded()?;
+    let target = DirectFetchTarget::mediawiki(
+        "https://en.wikipedia.org/wiki/Rust",
+        "https://en.wikipedia.org/w/api.php".to_owned(),
+    );
+    let body = br#"{"query":{"pages":[{"revisions":[{"slots":{"main":{"content":"line1\r\nline2\r\n"}}}]}]}}"# ;
+    let content = extract_content(&target, 200, &HeaderMap::new(), body, &config.direct_fetch)?;
+    assert!(!content.contains('\r'));
+    assert_eq!(content, "line1\nline2\n");
     Ok(())
 }
