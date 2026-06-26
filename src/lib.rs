@@ -1,6 +1,7 @@
 extern crate alloc;
 pub mod app;
 pub mod arguments;
+pub mod cli;
 pub mod config;
 pub mod direct;
 pub mod error;

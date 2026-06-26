@@ -18,6 +18,13 @@ pub(crate) fn http_service(config: &AppConfig) -> Result<HttpMcpService> {
         streamable_http_config(config),
     ))
 }
+#[inline]
+pub(crate) fn stdio_service(
+    config: &AppConfig,
+    credentials: tools::ToolCredentials,
+) -> Result<tools::ToolService> {
+    tools::ToolService::new_with_credentials(config.clone(), credentials)
+}
 #[must_use]
 pub(crate) fn streamable_http_config(config: &AppConfig) -> StreamableHttpServerConfig {
     StreamableHttpServerConfig::default()

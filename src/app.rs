@@ -1,24 +1,44 @@
 use crate::{
     Result,
     config::AppConfig,
-    mcp::{handler::health, http_service},
+    mcp::{self, handler::health, http_service, tools::ToolCredentials},
 };
 use axum::{Router, routing::get};
 use core::net::SocketAddr;
+use rmcp::{ServiceExt as _, transport::stdio};
 use tokio::net::TcpListener;
 use tracing::info;
 const STREAMABLE_HTTP_PATH: &str = "/mcp";
 const HEALTH_PATH: &str = "/health";
 #[expect(
     clippy::missing_inline_in_public_items,
-    reason = "The async server entrypoint performs network setup and is not an inline candidate."
+    reason = "The async server entrypoint composes HTTP and stdio MCP services."
 )]
-pub async fn run(config: AppConfig) -> anyhow::Result<()> {
+pub async fn run(config: AppConfig, credentials: ToolCredentials) -> anyhow::Result<()> {
+    let http_config = config.clone();
+    let http = Box::pin(run_http(http_config));
+    let stdio = Box::pin(run_stdio(config, credentials));
+    tokio::try_join!(http, stdio)?;
+    Ok(())
+}
+async fn run_http(config: AppConfig) -> anyhow::Result<()> {
     let address = SocketAddr::new(config.server.host.parse()?, config.server.port);
     let router = router(config.clone()).map_err(anyhow::Error::from)?;
     let listener = TcpListener::bind(address).await?;
     info!("web MCP server listening on http://{address}{STREAMABLE_HTTP_PATH}");
     axum::serve(listener, router).await?;
+    Ok(())
+}
+#[expect(
+    clippy::missing_inline_in_public_items,
+    reason = "The async server entrypoint performs MCP stdio I/O and is not an inline candidate."
+)]
+pub async fn run_stdio(config: AppConfig, credentials: ToolCredentials) -> anyhow::Result<()> {
+    let service = mcp::stdio_service(&config, credentials)?;
+    info!("web MCP server listening on stdio");
+    let running = Box::pin(service.serve(stdio())).await?;
+    let quit_reason = running.waiting().await?;
+    info!(?quit_reason, "web MCP stdio server stopped");
     Ok(())
 }
 #[inline]

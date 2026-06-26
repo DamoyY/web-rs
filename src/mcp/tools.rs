@@ -7,15 +7,22 @@ use crate::{
     page::{PageFetcher, TokenChunker, find_in_page, open_page_chunk, reader::ReaderCredentials},
     search::ExaSearchClient,
 };
+use alloc::borrow::Cow;
 use axum::http::HeaderMap;
 use fancy_regex::Regex;
 use futures::future::try_join_all;
 use sonic_rs::Value;
 #[cfg(test)]
 mod tests;
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ToolCredentials {
+    pub exa_api_key: Option<String>,
+    pub reader: Option<ReaderCredentials>,
+}
 #[derive(Clone)]
 pub struct ToolService {
     config: AppConfig,
+    credentials: ToolCredentials,
     chunker: TokenChunker,
     page_fetcher: PageFetcher,
     search: ExaSearchClient,
@@ -23,7 +30,12 @@ pub struct ToolService {
 impl ToolService {
     #[inline]
     pub fn new(config: AppConfig) -> Result<Self> {
+        Self::new_with_credentials(config, ToolCredentials::default())
+    }
+    #[inline]
+    pub fn new_with_credentials(config: AppConfig, credentials: ToolCredentials) -> Result<Self> {
         Ok(Self {
+            credentials,
             chunker: TokenChunker::new(&config.chunking)?,
             page_fetcher: PageFetcher::new(config.clone())?,
             search: crate::search::client(&config)?,
@@ -53,7 +65,11 @@ impl ToolService {
     }
     async fn search_query(&self, arguments: Option<Value>, headers: &HeaderMap) -> Result<Value> {
         let normalized = search_arguments(arguments)?;
-        let key = required_header(headers, &self.config.headers.exa_api_key)?;
+        let key = required_api_key(
+            headers,
+            &self.config.headers.exa_api_key,
+            self.credentials.exa_api_key.as_deref(),
+        )?;
         let results = self
             .search
             .search_many(&normalized.value.requests, &key)
@@ -66,7 +82,11 @@ impl ToolService {
     async fn open(&self, arguments: Option<Value>, headers: &HeaderMap) -> Result<Value> {
         let normalized = open_arguments(arguments)?;
         let mut warnings = normalized.warning.unwrap_or_default();
-        let credentials = reader_credentials(headers, &self.config.headers)?;
+        let credentials = reader_credentials(
+            headers,
+            &self.config.headers,
+            self.credentials.reader.clone(),
+        )?;
         let fetches = normalized
             .value
             .requests
@@ -96,7 +116,11 @@ impl ToolService {
     }
     async fn find(&self, arguments: Option<Value>, headers: &HeaderMap) -> Result<Value> {
         let normalized = find_arguments(arguments)?;
-        let credentials = reader_credentials(headers, &self.config.headers)?;
+        let credentials = reader_credentials(
+            headers,
+            &self.config.headers,
+            self.credentials.reader.clone(),
+        )?;
         let patterns = compile_patterns(&normalized.value.requests)?;
         let fetches = normalized
             .value
@@ -164,13 +188,23 @@ fn snippet_tokens_for_request(
     ));
     config.chunking.chunk_tokens
 }
-fn required_header(headers: &HeaderMap, name: &str) -> Result<String> {
-    optional_header(headers, name)
+fn required_api_key<'key>(
+    headers: &HeaderMap,
+    name: &str,
+    fallback: Option<&'key str>,
+) -> Result<Cow<'key, str>> {
+    if let Some(value) = optional_header(headers, name) {
+        return Ok(Cow::Owned(value));
+    }
+    fallback
+        .filter(|value| !value.is_empty())
+        .map(Cow::Borrowed)
         .ok_or_else(|| AppError::client(format!("Missing required header: {name}.")))
 }
 fn reader_credentials(
     headers: &HeaderMap,
     config: &crate::config::HeaderConfig,
+    fallback: Option<ReaderCredentials>,
 ) -> Result<Option<ReaderCredentials>> {
     let jina = optional_header(headers, &config.jina_api_key);
     let tinyfish = optional_header(headers, &config.tinyfish_api_key);
@@ -181,7 +215,7 @@ fn reader_credentials(
         ))),
         (Some(api_key), None) => Ok(Some(ReaderCredentials::Jina(api_key))),
         (None, Some(api_key)) => Ok(Some(ReaderCredentials::TinyFish(api_key))),
-        (None, None) => Ok(None),
+        (None, None) => Ok(fallback),
     }
 }
 fn optional_header(headers: &HeaderMap, name: &str) -> Option<String> {

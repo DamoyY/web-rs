@@ -18,7 +18,7 @@ fn reader_credentials_accepts_tinyfish_header() -> Result<()> {
         HeaderValue::from_static("tinyfish-key"),
     );
     assert_eq!(
-        reader_credentials(&headers, &config.headers)?,
+        reader_credentials(&headers, &config.headers, None)?,
         Some(ReaderCredentials::TinyFish("tinyfish-key".to_owned()))
     );
     Ok(())
@@ -35,10 +35,24 @@ fn reader_credentials_rejects_multiple_remote_reader_keys() {
         header_name(&config.headers.tinyfish_api_key).unwrap_or_else(|error| panic!("{error}")),
         HeaderValue::from_static("tinyfish-key"),
     );
-    let error = reader_credentials(&headers, &config.headers)
+    let error = reader_credentials(&headers, &config.headers, None)
         .unwrap_err()
         .client_message();
     assert!(error.contains("not both"));
+}
+#[test]
+fn reader_credentials_uses_fallback_without_reader_headers() {
+    let config = config::load_embedded().unwrap_or_else(|error| panic!("{error}"));
+    let headers = HeaderMap::new();
+    assert_eq!(
+        reader_credentials(
+            &headers,
+            &config.headers,
+            Some(ReaderCredentials::Jina("jina-key".to_owned()))
+        )
+        .unwrap_or_else(|error| panic!("{error}")),
+        Some(ReaderCredentials::Jina("jina-key".to_owned()))
+    );
 }
 fn header_name(value: &str) -> core::result::Result<HeaderName, InvalidHeaderName> {
     HeaderName::from_bytes(value.as_bytes())

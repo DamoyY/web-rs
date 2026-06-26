@@ -7,6 +7,7 @@ edition = "2024"
 anyhow = "*"
 axum = { version = "*", features = ["macros"] }
 chrono = { version = "*", default-features = false, features = ["clock", "std"] }
+clap = { version = "*", features = ["derive"] }
 content_inspector = "*"
 fancy-regex = "*"
 futures = "*"
@@ -16,7 +17,7 @@ num-traits = "*"
 percent-encoding = "*"
 rand = "*"
 reqwest = { version = "*", default-features = false, features = ["deflate", "gzip", "json", "rustls-tls"] }
-rmcp = { version = "*", features = ["macros", "schemars", "server", "transport-streamable-http-server"] }
+rmcp = { version = "*", features = ["macros", "schemars", "server", "transport-io", "transport-streamable-http-server"] }
 schemars = { version = "*", features = ["derive"] }
 serde = { version = "*", features = ["derive"] }
 serde-saphyr = "*"
