@@ -23,7 +23,10 @@ pub(crate) fn stdio_service(
     config: &AppConfig,
     credentials: tools::ToolCredentials,
 ) -> Result<tools::ToolService> {
-    tools::ToolService::new_with_credentials(config.clone(), credentials)
+    let mut stdio_config = config.clone();
+    stdio_config.ssrf.block_private_networks = false;
+    stdio_config.ssrf.block_local_hostnames = false;
+    tools::ToolService::new_with_credentials(stdio_config, credentials)
 }
 #[must_use]
 pub(crate) fn streamable_http_config(config: &AppConfig) -> StreamableHttpServerConfig {

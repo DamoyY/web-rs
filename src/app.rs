@@ -6,10 +6,13 @@ use crate::{
 use axum::{Router, routing::get};
 use core::net::SocketAddr;
 use rmcp::{ServiceExt as _, transport::stdio};
+use std::io;
 use tokio::net::TcpListener;
-use tracing::info;
+use tracing::{info, warn};
 const STREAMABLE_HTTP_PATH: &str = "/mcp";
 const HEALTH_PATH: &str = "/health";
+#[cfg(test)]
+mod tests;
 #[expect(
     clippy::missing_inline_in_public_items,
     reason = "The async server entrypoint composes HTTP and stdio MCP services."
@@ -24,7 +27,14 @@ pub async fn run(config: AppConfig, credentials: ToolCredentials) -> anyhow::Res
 async fn run_http(config: AppConfig) -> anyhow::Result<()> {
     let address = SocketAddr::new(config.server.host.parse()?, config.server.port);
     let router = router(config.clone()).map_err(anyhow::Error::from)?;
-    let listener = TcpListener::bind(address).await?;
+    let listener = match TcpListener::bind(address).await {
+        Ok(listener) => listener,
+        Err(error) if is_address_in_use(&error) => {
+            warn ! (% address , % error , "HTTP MCP port is already in use; continuing with stdio only");
+            return Ok(());
+        }
+        Err(error) => return Err(error.into()),
+    };
     info!("web MCP server listening on http://{address}{STREAMABLE_HTTP_PATH}");
     axum::serve(listener, router).await?;
     Ok(())
@@ -48,4 +58,7 @@ pub fn router(config: AppConfig) -> Result<Router> {
         .route(HEALTH_PATH, get(health))
         .nest_service(STREAMABLE_HTTP_PATH, service)
         .with_state(config))
+}
+fn is_address_in_use(error: &io::Error) -> bool {
+    error.kind() == io::ErrorKind::AddrInUse
 }
