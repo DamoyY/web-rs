@@ -19,6 +19,7 @@ pub struct ServerConfig {
 pub struct HeaderConfig {
     pub exa_api_key: String,
     pub jina_api_key: String,
+    pub tinyfish_api_key: String,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -60,6 +61,13 @@ pub struct JinaConfig {
     pub arxiv_pdf_url_prefix: String,
     pub arxiv_html_url_prefix: String,
     pub viewport: JinaViewportConfig,
+}
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct TinyFishConfig {
+    pub endpoint: String,
+    pub format: String,
+    pub per_url_timeout_ms: u64,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -105,6 +113,7 @@ pub struct AppConfig {
     pub search: SearchConfig,
     pub http: HttpConfig,
     pub jina: JinaConfig,
+    pub tinyfish: TinyFishConfig,
     pub chunking: ChunkingConfig,
     pub find: FindConfig,
     pub direct_fetch: DirectFetchConfig,
@@ -143,6 +152,19 @@ impl AppConfig {
         validation::header_value(&self.http.user_agent, "http.user_agent")?;
         validation::endpoint(&self.search.endpoint, "search.endpoint")?;
         validation::endpoint(&self.jina.endpoint, "jina.endpoint")?;
+        validation::endpoint(&self.tinyfish.endpoint, "tinyfish.endpoint")?;
+        validation::positive(
+            &self.tinyfish.per_url_timeout_ms,
+            "tinyfish.per_url_timeout_ms",
+        )?;
+        if self.tinyfish.per_url_timeout_ms > 110_000 {
+            return Err(AppError::config(
+                "tinyfish.per_url_timeout_ms must be <= 110000",
+            ));
+        }
+        if self.tinyfish.format != "markdown" {
+            return Err(AppError::config("tinyfish.format must be markdown"));
+        }
         validation::endpoint(&self.jina.arxiv_pdf_url_prefix, "jina.arxiv_pdf_url_prefix")?;
         validation::endpoint(
             &self.jina.arxiv_html_url_prefix,

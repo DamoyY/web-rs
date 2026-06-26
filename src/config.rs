@@ -15,6 +15,7 @@ pub type JinaViewportConfig = types::JinaViewportConfig;
 pub type SearchConfig = types::SearchConfig;
 pub type ServerConfig = types::ServerConfig;
 pub type SsrfConfig = types::SsrfConfig;
+pub type TinyFishConfig = types::TinyFishConfig;
 #[inline]
 #[must_use]
 pub const fn default_yaml() -> &'static str {

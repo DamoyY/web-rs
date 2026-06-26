@@ -4,13 +4,15 @@ use crate::{
     config::AppConfig,
     error::AppError,
     models::{FindResponse, OpenResponse, SearchQueryResponse},
-    page::{PageFetcher, TokenChunker, find_in_page, open_page_chunk},
+    page::{PageFetcher, TokenChunker, find_in_page, open_page_chunk, reader::ReaderCredentials},
     search::ExaSearchClient,
 };
 use axum::http::HeaderMap;
 use fancy_regex::Regex;
 use futures::future::try_join_all;
 use sonic_rs::Value;
+#[cfg(test)]
+mod tests;
 #[derive(Clone)]
 pub struct ToolService {
     config: AppConfig,
@@ -64,12 +66,12 @@ impl ToolService {
     async fn open(&self, arguments: Option<Value>, headers: &HeaderMap) -> Result<Value> {
         let normalized = open_arguments(arguments)?;
         let mut warnings = normalized.warning.unwrap_or_default();
-        let jina_key = optional_header(headers, &self.config.headers.jina_api_key);
+        let credentials = reader_credentials(headers, &self.config.headers)?;
         let fetches = normalized
             .value
             .requests
             .iter()
-            .map(|request| self.page_fetcher.fetch(&request.url, jina_key.as_deref()));
+            .map(|request| self.page_fetcher.fetch(&request.url, credentials.as_ref()));
         let pages = try_join_all(fetches).await?;
         let mut opened = Vec::with_capacity(pages.len());
         for (index, (request, page)) in normalized
@@ -94,13 +96,13 @@ impl ToolService {
     }
     async fn find(&self, arguments: Option<Value>, headers: &HeaderMap) -> Result<Value> {
         let normalized = find_arguments(arguments)?;
-        let jina_key = optional_header(headers, &self.config.headers.jina_api_key);
+        let credentials = reader_credentials(headers, &self.config.headers)?;
         let patterns = compile_patterns(&normalized.value.requests)?;
         let fetches = normalized
             .value
             .requests
             .iter()
-            .map(|request| self.page_fetcher.fetch(&request.url, jina_key.as_deref()));
+            .map(|request| self.page_fetcher.fetch(&request.url, credentials.as_ref()));
         let pages = try_join_all(fetches).await?;
         let mut warnings = normalized.warning.unwrap_or_default();
         let mut found = Vec::with_capacity(pages.len());
@@ -165,6 +167,22 @@ fn snippet_tokens_for_request(
 fn required_header(headers: &HeaderMap, name: &str) -> Result<String> {
     optional_header(headers, name)
         .ok_or_else(|| AppError::client(format!("Missing required header: {name}.")))
+}
+fn reader_credentials(
+    headers: &HeaderMap,
+    config: &crate::config::HeaderConfig,
+) -> Result<Option<ReaderCredentials>> {
+    let jina = optional_header(headers, &config.jina_api_key);
+    let tinyfish = optional_header(headers, &config.tinyfish_api_key);
+    match (jina, tinyfish) {
+        (Some(_jina), Some(_tinyfish)) => Err(AppError::client(format!(
+            "Provide exactly one remote reader API key header: {} or {}, not both.",
+            config.jina_api_key, config.tinyfish_api_key
+        ))),
+        (Some(api_key), None) => Ok(Some(ReaderCredentials::Jina(api_key))),
+        (None, Some(api_key)) => Ok(Some(ReaderCredentials::TinyFish(api_key))),
+        (None, None) => Ok(None),
+    }
 }
 fn optional_header(headers: &HeaderMap, name: &str) -> Option<String> {
     headers

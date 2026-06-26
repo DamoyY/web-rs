@@ -4,7 +4,7 @@ use crate::{
     direct::{DirectFetchTarget, fetch_direct_text, resolve_direct_fetch_target},
     error::AppError,
     net::{SecureHttpClient, SsrfGuard, guard, secure_client_from_config},
-    page::jina::JinaReaderClient,
+    page::reader::{PageReader, ReaderCredentials},
 };
 use tracing::warn;
 use url::Url;
@@ -22,34 +22,38 @@ pub struct PageContent {
     reason = "Page sources are closed because callers branch on the configured readers."
 )]
 pub enum PageSource {
-    Jina,
     Direct,
+    Reader,
 }
 #[derive(Clone)]
 pub struct PageFetcher {
     config: AppConfig,
     http: SecureHttpClient,
     guard: SsrfGuard,
-    jina: JinaReaderClient,
+    reader: PageReader,
 }
 impl PageFetcher {
     #[inline]
     pub fn new(config: AppConfig) -> Result<Self> {
         let http = secure_client_from_config(&config)?;
         let guard = guard(&config.ssrf);
-        let jina = JinaReaderClient::new(config.clone(), http.clone());
+        let reader = PageReader::new(config.clone(), http.clone());
         Ok(Self {
             config,
             http,
             guard,
-            jina,
+            reader,
         })
     }
     #[expect(
         clippy::missing_inline_in_public_items,
         reason = "Page fetching performs async network I/O and is not an inline candidate."
     )]
-    pub async fn fetch(&self, url: &str, jina_api_key: Option<&str>) -> Result<PageContent> {
+    pub async fn fetch(
+        &self,
+        url: &str,
+        credentials: Option<&ReaderCredentials>,
+    ) -> Result<PageContent> {
         let parsed =
             Url::parse(url).map_err(|error| AppError::client(format!("Invalid URL: {error}")))?;
         self.guard.validate_url(&parsed).await?;
@@ -79,16 +83,16 @@ impl PageFetcher {
                 }
             }
         }
-        let Some(key) = jina_api_key else {
+        let Some(reader_credentials) = credentials else {
             return Err(AppError::client(format!(
-                "Missing required header: {}. URLs that cannot be directly fetched require a Jina API key.",
-                self.config.headers.jina_api_key
+                "Missing required header: {} or {}. URLs that cannot be directly fetched require one remote reader API key.",
+                self.config.headers.jina_api_key, self.config.headers.tinyfish_api_key
             )));
         };
-        let markdown = self.jina.read_markdown(url, key).await?;
+        let markdown = self.reader.read_markdown(url, reader_credentials).await?;
         Ok(PageContent {
             url: url.to_owned(),
-            source: PageSource::Jina,
+            source: PageSource::Reader,
             markdown,
         })
     }

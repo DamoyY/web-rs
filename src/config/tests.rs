@@ -25,6 +25,7 @@ fn embedded_config_keeps_runtime_free_defaults() -> Result<()> {
     assert!(!loaded.server.stateful_http);
     assert!(loaded.server.json_response);
     assert_eq!(loaded.search.endpoint, "https://api.exa.ai/search");
+    assert_eq!(loaded.tinyfish.endpoint, "https://api.fetch.tinyfish.ai");
     assert!((loaded.direct_fetch.similarity_threshold - 0.9_f64).abs() < f64::EPSILON);
     Ok(())
 }

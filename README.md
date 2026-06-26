@@ -10,7 +10,7 @@
 - `open`：抓取指定 URL 的网页，按 token 切分后返回指定分块的正文。
 - `find`：抓取指定 URL 的网页，在其中用正则匹配文本并返回带上下文的片段。
 
-服务还内置了对常见站点的直连抓取（代码托管、包仓库、维基类站点、Microsoft Learn 等），抓不到时回退到 Jina Reader；同时对所有用户提供的 URL 施加 SSRF 防护。
+服务还内置了对常见站点的直连抓取（代码托管、包仓库、维基类站点、Microsoft Learn 等），抓不到时回退到远程清洗服务；同时对所有用户提供的 URL 施加 SSRF 防护。
 
 ## 协议与端点
 
@@ -34,7 +34,7 @@ http://<host>:18080/mcp
 不同工具依赖不同的上游服务，凭据通过 HTTP 头随请求传入：
 
 - `x-exa-api-key`：`search_query` 必需（Exa 搜索）。
-- `x-jina-api-key`：仅当目标网页无法直连抓取、需要回退到 Jina Reader 时才需要。能被直连抓取的站点（见下文）无需该头。
+- `x-jina-api-key` / `x-tinyfish-api-key`：仅当目标网页无法直连抓取、需要回退到远程清洗服务时才需要。二者必须二选一，不能同时发送。能被直连抓取的站点（见下文）无需这两个头。
 
 ## 工具：search_query
 
@@ -169,7 +169,7 @@ http://<host>:18080/mcp
 
 ## 网页抓取行为
 
-`open` 与 `find` 在抓取前会优先尝试直连，命中以下规则时直接取原始内容，通常无需 Jina API key：
+`open` 与 `find` 在抓取前会优先尝试直连，命中以下规则时直接取原始内容，通常无需远程清洗服务 API key：
 
 - 代码托管：GitHub（含 `raw.githubusercontent.com`、Gist）、GitLab、Bitbucket、Hugging Face 的 `blob`/`raw`/`resolve` 链接，会被换算成原始文件地址，并拒绝二进制响应。
 - Stack Overflow：问题页会通过 Stack Exchange API 直连读取，返回 `question` 与 `answers` 组成的 JSON。
@@ -178,7 +178,7 @@ http://<host>:18080/mcp
 - Microsoft Learn：`learn.microsoft.com` 取其 Markdown 版本。
 - 通用回退：对原始 URL 尝试 `Accept: text/markdown`，以及带 `.md` 后缀的地址。
 
-当直连全部失败时，会回退到 Jina Reader，此时需要提供 `x-jina-api-key`。此外，`arxiv.org/pdf/...` 会在回退抓取时改写为 `arxiv.org/html/...`。直连内容大小上限为 1 MiB。
+当直连全部失败时，会回退到远程清洗服务，此时需要提供 `x-jina-api-key` 或 `x-tinyfish-api-key` 之一。使用 Jina Reader 时，`arxiv.org/pdf/...` 会在回退抓取前改写为 `arxiv.org/html/...`。直连内容大小上限为 1 MiB。
 
 ## 安全限制（SSRF）
 
@@ -197,10 +197,11 @@ http://<host>:18080/mcp
 服务的默认配置见 `config/default.yaml`，主要分组如下：
 
 - `server`：监听地址与端口、协议版本、有/无状态模式、JSON 响应开关、Host/Origin 允许列表、日志级别。
-- `headers`：Exa 与 Jina 的密钥头名称（`x-exa-api-key`、`x-jina-api-key`）。
+- `headers`：Exa、Jina 与 TinyFish 的密钥头名称（`x-exa-api-key`、`x-jina-api-key`、`x-tinyfish-api-key`）。
 - `search`：Exa 端点、返回条数（默认 15）、搜索类型（`deep-lite`）、高亮字符上限、缓存与实时抓取超时。
-- `http`：出站请求的 User-Agent、Jina/Exa 超时（默认 120s）、直连抓取超时（默认 20s）、最大重定向次数（默认 5）。
+- `http`：出站请求的 User-Agent、搜索与远程清洗服务超时（默认 120s）、直连抓取超时（默认 20s）、最大重定向次数（默认 5）。
 - `jina`：Jina Reader 端点与渲染引擎、返回格式、arXiv PDF/HTML 链接前缀、视口等参数。
+- `tinyfish`：TinyFish Fetch API 端点、返回格式与单 URL 超时。
 - `chunking`：分词器（`o200k_base`）、单块 token 上限（默认 5000）、重叠比例（默认 0.1）。
 - `find`：默认片段 token（200）、单页最大命中数（50）。
 - `direct_fetch`：直连内容大小上限、相似度阈值、各代码托管站点与特殊站点的主机/域名列表。

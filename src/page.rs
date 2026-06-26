@@ -3,8 +3,10 @@ pub mod fetcher;
 pub mod finder;
 pub mod jina;
 pub mod open;
+pub mod reader;
 #[cfg(test)]
 mod tests;
+pub mod tinyfish;
 pub type PageContent = fetcher::PageContent;
 pub type PageFetcher = fetcher::PageFetcher;
 pub type TextChunk = chunking::TextChunk;

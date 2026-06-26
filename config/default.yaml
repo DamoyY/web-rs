@@ -15,6 +15,7 @@ server:
 headers:
   exa_api_key: x-exa-api-key # Exa API key header.
   jina_api_key: x-jina-api-key # Jina API key header.
+  tinyfish_api_key: x-tinyfish-api-key # TinyFish Fetch API key header.
 
 # Exa search behavior.
 search:
@@ -28,7 +29,7 @@ search:
 # HTTP client behavior for all outbound requests.
 http:
   user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 # User-Agent for outbound HTTP requests.
-  timeout_seconds: 120.0 # Jina and Exa timeout.
+  timeout_seconds: 120.0 # Search and remote reader timeout.
   direct_fetch_timeout_seconds: 20.0 # Direct fetch timeout.
   max_redirects: 5 # Redirect hops after per-hop SSRF validation.
 
@@ -49,6 +50,12 @@ jina:
     width: 1920 # Browser viewport width.
     height: 1080 # Browser viewport height.
 
+# TinyFish Fetch API behavior.
+tinyfish:
+  endpoint: https://api.fetch.tinyfish.ai # TinyFish Fetch endpoint.
+  format: markdown # Requested output format.
+  per_url_timeout_ms: 110000 # Per-URL fetch timeout sent to TinyFish.
+
 # Token chunking behavior.
 chunking:
   tokenizer: o200k_base # Tokenizer name.
@@ -60,7 +67,7 @@ find:
   default_snippet_tokens: 200 # Default snippet token budget.
   max_matches_per_page: 50 # Maximum matches returned per page.
 
-# Direct fetch behavior before falling back to Jina.
+# Direct fetch behavior before falling back to a remote reader.
 direct_fetch:
   max_bytes: 1048576 # Maximum accepted direct response bytes.
   similarity_threshold: 0.9 # Reject generated Markdown URLs when their content is at least this similar to a random missing-URL probe.
