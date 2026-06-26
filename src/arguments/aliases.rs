@@ -1,17 +1,27 @@
 pub const SEARCH_FIELDS: &[FieldSpec] = &[
-    FieldSpec::new("q", &["query", "queries"]),
+    FieldSpec::new(
+        "q",
+        &[
+            "query",
+            "queries",
+            "term",
+            "terms",
+            "search_term",
+            "search_terms",
+        ],
+    ),
     FieldSpec::new("recency", &["recencies"]),
-    FieldSpec::new("domains", &["domain"]),
-    FieldSpec::new("category", &["categories"]),
+    FieldSpec::new("domains", &["domain", "urls", "url"]),
+    FieldSpec::new("category", &["categories", "type", "class"]),
 ];
 pub const OPEN_FIELDS: &[FieldSpec] = &[
-    FieldSpec::new("url", &["urls"]),
-    FieldSpec::new("chunk", &["chunks"]),
+    FieldSpec::new("url", &["urls", "domain", "domains"]),
+    FieldSpec::new("chunk", &["chunks", "block", "blocks", "piece", "pieces"]),
 ];
 pub const FIND_FIELDS: &[FieldSpec] = &[
-    FieldSpec::new("url", &["urls"]),
+    FieldSpec::new("url", &["urls", "domain", "domains"]),
     FieldSpec::new("pattern", &["patterns"]),
-    FieldSpec::new("snippet_tokens", &["snippet_token"]),
+    FieldSpec::new("snippet_tokens", &["snippet_token", "snippet", "snippets"]),
 ];
 #[derive(Clone, Copy, Debug)]
 pub struct FieldSpec {

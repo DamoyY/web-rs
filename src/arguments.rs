@@ -1,5 +1,8 @@
 pub mod aliases;
+pub(crate) mod field;
 pub mod normalizer;
+pub(crate) mod request;
+pub(crate) mod singleton;
 pub(crate) mod support;
 #[cfg(test)]
 mod tests;
