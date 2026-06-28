@@ -9,7 +9,7 @@ use crate::{
     net::{FetchResponse, SecureHttpClient},
 };
 use futures::future::{BoxFuture, FutureExt as _, Shared, join};
-use reqwest::header::{ACCEPT, HeaderMap, HeaderValue, RANGE, USER_AGENT};
+use reqwest::header::{ACCEPT, HeaderMap, HeaderValue, USER_AGENT};
 pub type SharedProbeFetch = Shared<BoxFuture<'static, Result<FetchResponse>>>;
 #[expect(
     clippy::missing_inline_in_public_items,
@@ -21,9 +21,9 @@ pub async fn fetch_direct_text(
     direct_config: &DirectFetchConfig,
     http_config: &HttpConfig,
 ) -> Result<String> {
-    let headers = request_headers(client, target, direct_config)?;
+    let headers = request_headers(client, target)?;
     let (response, probe_response) =
-        fetch_target_responses(client, target, headers, http_config).await?;
+        fetch_target_responses(client, target, headers, direct_config, http_config).await?;
     extract_direct_content(target, &response, probe_response, direct_config)
 }
 #[expect(
@@ -37,8 +37,14 @@ pub async fn fetch_direct_text_with_probe(
     http_config: &HttpConfig,
     probe_fetch: SharedProbeFetch,
 ) -> Result<String> {
-    let headers = request_headers(client, target, direct_config)?;
-    let main_fetch = fetch_response(client, &target.request_url, headers, http_config);
+    let headers = request_headers(client, target)?;
+    let main_fetch = fetch_response(
+        client,
+        &target.request_url,
+        headers,
+        direct_config,
+        http_config,
+    );
     let (response_result, probe_result) = join(main_fetch, probe_fetch).await;
     let response = response_result?;
     extract_direct_content(target, &response, Some(probe_result), direct_config)
@@ -51,13 +57,16 @@ pub fn shared_probe_fetch(
     direct_config: &DirectFetchConfig,
     http_config: &HttpConfig,
 ) -> Result<SharedProbeFetch> {
-    let headers = request_headers(&client, target, direct_config)?;
+    let headers = request_headers(&client, target)?;
     let timeout_seconds = http_config.direct_fetch_timeout_seconds;
-    Ok(
-        async move { client.get(&probe_url, headers, timeout_seconds).await }
-            .boxed()
-            .shared(),
-    )
+    let max_bytes = direct_config.max_bytes;
+    Ok(async move {
+        client
+            .get_with_body_limit(&probe_url, headers, timeout_seconds, max_bytes)
+            .await
+    }
+    .boxed()
+    .shared())
 }
 fn extract_direct_content(
     target: &DirectFetchTarget,
@@ -84,16 +93,30 @@ async fn fetch_target_responses(
     client: &SecureHttpClient,
     target: &DirectFetchTarget,
     headers: HeaderMap,
+    direct_config: &DirectFetchConfig,
     http_config: &HttpConfig,
 ) -> Result<(FetchResponse, Option<Result<FetchResponse>>)> {
     let Some(probe_url) = target.similarity_probe_url.as_deref() else {
         return Ok((
-            fetch_response(client, &target.request_url, headers, http_config).await?,
+            fetch_response(
+                client,
+                &target.request_url,
+                headers,
+                direct_config,
+                http_config,
+            )
+            .await?,
             None,
         ));
     };
-    let main_fetch = fetch_response(client, &target.request_url, headers.clone(), http_config);
-    let probe_fetch = fetch_response(client, probe_url, headers, http_config);
+    let main_fetch = fetch_response(
+        client,
+        &target.request_url,
+        headers.clone(),
+        direct_config,
+        http_config,
+    );
+    let probe_fetch = fetch_response(client, probe_url, headers, direct_config, http_config);
     let (main_result, probe_result) = join(main_fetch, probe_fetch).await;
     Ok((main_result?, Some(probe_result)))
 }
@@ -101,25 +124,23 @@ async fn fetch_response(
     client: &SecureHttpClient,
     url: &str,
     headers: HeaderMap,
+    direct_config: &DirectFetchConfig,
     http_config: &HttpConfig,
 ) -> Result<FetchResponse> {
     client
-        .get(url, headers, http_config.direct_fetch_timeout_seconds)
+        .get_with_body_limit(
+            url,
+            headers,
+            http_config.direct_fetch_timeout_seconds,
+            direct_config.max_bytes,
+        )
         .await
 }
-fn request_headers(
-    client: &SecureHttpClient,
-    target: &DirectFetchTarget,
-    config: &DirectFetchConfig,
-) -> Result<HeaderMap> {
+fn request_headers(client: &SecureHttpClient, target: &DirectFetchTarget) -> Result<HeaderMap> {
     let mut headers = HeaderMap::new();
     headers.insert(
         ACCEPT,
         HeaderValue::from_str(&accept_header(target)).map_err(header_error)?,
-    );
-    headers.insert(
-        RANGE,
-        HeaderValue::from_str(&format!("bytes=0-{}", config.max_bytes)).map_err(header_error)?,
     );
     headers.insert(USER_AGENT, client.user_agent());
     Ok(headers)
@@ -181,3 +202,5 @@ fn accept_header(target: &DirectFetchTarget) -> String {
 fn header_error(error: reqwest::header::InvalidHeaderValue) -> AppError {
     AppError::internal(format!("invalid configured HTTP header: {error}"))
 }
+#[cfg(test)]
+mod tests;

@@ -1,7 +1,7 @@
 use crate::{
     Result,
     error::AppError,
-    net::{SsrfGuard, resolver::GuardedResolver},
+    net::{SsrfGuard, body, resolver::GuardedResolver},
 };
 use alloc::sync::Arc;
 use core::time::Duration;
@@ -60,8 +60,31 @@ impl SecureHttpClient {
     ) -> Result<FetchResponse> {
         let parsed =
             Url::parse(url).map_err(|error| AppError::client(format!("Invalid URL: {error}")))?;
-        self.request_with_redirects(Method::GET, parsed, headers, None, timeout_seconds)
+        self.request_with_redirects(Method::GET, parsed, headers, None, timeout_seconds, None)
             .await
+    }
+    #[expect(
+        clippy::missing_inline_in_public_items,
+        reason = "HTTP GET performs async network I/O and is not an inline candidate."
+    )]
+    pub async fn get_with_body_limit(
+        &self,
+        url: &str,
+        headers: HeaderMap,
+        timeout_seconds: f64,
+        max_bytes: usize,
+    ) -> Result<FetchResponse> {
+        let parsed =
+            Url::parse(url).map_err(|error| AppError::client(format!("Invalid URL: {error}")))?;
+        self.request_with_redirects(
+            Method::GET,
+            parsed,
+            headers,
+            None,
+            timeout_seconds,
+            Some(max_bytes),
+        )
+        .await
     }
     #[expect(
         clippy::missing_inline_in_public_items,
@@ -85,7 +108,7 @@ impl SecureHttpClient {
             .timeout(duration(timeout_seconds)?)
             .send()
             .await?;
-        collect_response(response).await
+        collect_response(response, None).await
     }
     async fn request_with_redirects(
         &self,
@@ -94,6 +117,7 @@ impl SecureHttpClient {
         headers: HeaderMap,
         body: Option<Vec<u8>>,
         timeout_seconds: f64,
+        body_limit: Option<usize>,
     ) -> Result<FetchResponse> {
         for redirect_index in 0..=self.max_redirects {
             self.guard.validate_url(&url).await?;
@@ -106,10 +130,10 @@ impl SecureHttpClient {
                 .send()
                 .await?;
             if !response.status().is_redirection() {
-                return collect_response(response).await;
+                return collect_response(response, body_limit).await;
             }
             let Some(next) = redirect_target(response.headers().get(LOCATION), &url)? else {
-                return collect_response(response).await;
+                return collect_response(response, body_limit).await;
             };
             if redirect_index == self.max_redirects {
                 return Err(AppError::client("Too many redirects while fetching URL."));
@@ -130,10 +154,13 @@ fn redirect_target(location: Option<&HeaderValue>, base: &Url) -> Result<Option<
         .map(Some)
         .map_err(|error| AppError::client(format!("Redirect location is invalid: {error}")))
 }
-async fn collect_response(response: reqwest::Response) -> Result<FetchResponse> {
+async fn collect_response(
+    response: reqwest::Response,
+    body_limit: Option<usize>,
+) -> Result<FetchResponse> {
     let status = response.status();
     let headers = response.headers().clone();
-    let body = response.bytes().await?.to_vec();
+    let body = body::collect(response, body_limit).await?;
     Ok(FetchResponse {
         status,
         headers,

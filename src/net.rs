@@ -1,3 +1,4 @@
+pub(crate) mod body;
 pub mod client;
 pub(crate) mod resolver;
 pub mod ssrf;
