@@ -48,7 +48,7 @@ Type=simple
 User=webrs
 Group=webrs
 WorkingDirectory=/opt/web-mcp
-ExecStart=/opt/web-mcp/web-rs
+ExecStart=/opt/web-mcp/web-rs --transport http
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true
@@ -100,7 +100,7 @@ systemctl daemon-reload
 systemctl enable --now web-rs.service
 sleep 1
 systemctl is-active --quiet web-rs.service || {
-    systemctl --no-pager --full status web-rs.service
+    systemctl --no-pager --full status web-rs.service || true
     exit 1
 }
 curl -fsS http://127.0.0.1:18080/health

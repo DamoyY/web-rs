@@ -20,7 +20,7 @@ headers:
 # Exa search behavior.
 search:
   endpoint: https://api.exa.ai/search # Exa search endpoint.
-  num_results: 15 # Results per request.
+  num_results: 10 # Results per request.
   type: deep # Exa search type.
   highlights_max_characters: 1000 # Highlight character budget.
   max_age_hours: 9007199254740991 # Cache age policy sent to Exa.
