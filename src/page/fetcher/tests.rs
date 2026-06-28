@@ -49,7 +49,7 @@ fn markdown_fallback_replaces_existing_extension_and_shares_probe() -> Result<()
         request_urls,
         [
             "https://example.com/foo.html?x=1",
-            "https://example.com/foo.html/index.md?x=1",
+            "https://example.com/foo/index.md?x=1",
             "https://example.com/foo.md?x=1",
         ]
     );

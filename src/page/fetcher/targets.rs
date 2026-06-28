@@ -57,10 +57,12 @@ fn index_markdown_url(url: &str) -> String {
         return url.to_owned();
     };
     let path = parsed.path().trim_end_matches('/');
+    let base_path =
+        extension_dot_index(path).map_or(path, |dot_index| path.get(..dot_index).unwrap_or(path));
     let next_path = if path.is_empty() {
         "/index.md".to_owned()
     } else {
-        format!("{path}/index.md")
+        format!("{base_path}/index.md")
     };
     parsed.set_path(&next_path);
     parsed.to_string()
@@ -68,16 +70,20 @@ fn index_markdown_url(url: &str) -> String {
 fn replace_extension_with_markdown(url: &str) -> Option<String> {
     let mut parsed = Url::parse(url).ok()?;
     let path = parsed.path().trim_end_matches('/');
-    let slash_index = path.rfind('/').unwrap_or(0);
-    let dot_index = path.rfind('.')?;
-    if dot_index <= slash_index || dot_index == path.len().saturating_sub(1) {
-        return None;
-    }
+    let dot_index = extension_dot_index(path)?;
     let prefix = path
         .get(..dot_index)
         .map_or_else(|| path.to_owned(), str::to_owned);
     parsed.set_path(&format!("{prefix}.md"));
     Some(parsed.to_string())
+}
+fn extension_dot_index(path: &str) -> Option<usize> {
+    let slash_index = path.rfind('/').unwrap_or(0);
+    let dot_index = path.rfind('.')?;
+    if dot_index <= slash_index || dot_index == path.len().saturating_sub(1) {
+        return None;
+    }
+    Some(dot_index)
 }
 fn dedup(values: Vec<String>) -> Vec<String> {
     let mut unique = Vec::with_capacity(values.len());
