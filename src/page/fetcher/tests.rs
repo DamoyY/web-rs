@@ -1,4 +1,4 @@
-use super::{direct_fetch_targets, replace_path_suffix};
+use super::targets::{direct_fetch_targets, replace_path_suffix};
 use crate::{Result, config, error::AppError};
 #[test]
 #[expect(

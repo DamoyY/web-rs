@@ -1,13 +1,16 @@
 use crate::{
     Result,
     config::AppConfig,
-    direct::{DirectFetchTarget, fetch_direct_text, resolve_direct_fetch_target},
+    direct::fetch_direct_text,
     error::AppError,
     net::{SecureHttpClient, SsrfGuard, guard, secure_client_from_config},
     page::reader::{PageReader, ReaderCredentials},
 };
+use futures::{StreamExt as _, future::try_join_all, stream::FuturesUnordered};
+use targets::direct_fetch_targets;
 use tracing::warn;
 use url::Url;
+mod targets;
 #[cfg(test)]
 mod tests;
 #[derive(Clone, Debug)]
@@ -54,40 +57,11 @@ impl PageFetcher {
         url: &str,
         credentials: Option<&ReaderCredentials>,
     ) -> Result<PageContent> {
-        let parsed =
-            Url::parse(url).map_err(|error| AppError::client(format!("Invalid URL: {error}")))?;
-        self.guard.validate_url(&parsed).await?;
-        let targets = direct_fetch_targets(url, &self.config.direct_fetch);
-        for target in targets {
-            match fetch_direct_text(
-                &self.http,
-                &target,
-                &self.config.direct_fetch,
-                &self.config.http,
-            )
-            .await
-            {
-                Ok(markdown) => {
-                    return Ok(PageContent {
-                        url: url.to_owned(),
-                        source: PageSource::Direct,
-                        markdown,
-                    });
-                }
-                Err(error) => {
-                    warn!(
-                        "Direct fetch failed for {}: {}",
-                        target.request_url,
-                        error.client_message()
-                    );
-                }
-            }
+        if let Some(page) = self.fetch_direct(url).await? {
+            return Ok(page);
         }
         let Some(reader_credentials) = credentials else {
-            return Err(AppError::client(format!(
-                "Missing required header: {} or {}. URLs that cannot be directly fetched require one remote reader API key.",
-                self.config.headers.jina_api_key, self.config.headers.tinyfish_api_key
-            )));
+            return Err(self.missing_reader_credentials_error());
         };
         let markdown = self.reader.read_markdown(url, reader_credentials).await?;
         Ok(PageContent {
@@ -96,43 +70,108 @@ impl PageFetcher {
             markdown,
         })
     }
-}
-fn direct_fetch_targets(
-    url: &str,
-    config: &crate::config::DirectFetchConfig,
-) -> Vec<DirectFetchTarget> {
-    let markdown_targets = vec![
-        markdown_accept_target(url),
-        markdown_direct_fetch_target(url),
-    ];
-    if let Some(target) = resolve_direct_fetch_target(url, config) {
-        return core::iter::once(target).chain(markdown_targets).collect();
+    #[expect(
+        clippy::missing_inline_in_public_items,
+        reason = "Batch page fetching coordinates direct HTTP attempts and optional remote reader calls."
+    )]
+    pub async fn fetch_many(
+        &self,
+        urls: &[String],
+        credentials: Option<&ReaderCredentials>,
+    ) -> Result<Vec<PageContent>> {
+        if !matches!(credentials, Some(ReaderCredentials::TinyFish(_))) {
+            let fetches = urls.iter().map(|url| self.fetch(url, credentials));
+            return try_join_all(fetches).await;
+        }
+        let mut pages = try_join_all(urls.iter().map(|url| self.fetch_direct(url))).await?;
+        let missing = pages
+            .iter()
+            .zip(urls.iter())
+            .enumerate()
+            .filter(|entry| entry.1.0.is_none())
+            .map(|(index, (_page, url))| (index, url.clone()))
+            .collect::<Vec<_>>();
+        if missing.is_empty() {
+            return collect_pages(pages);
+        }
+        let Some(reader_credentials) = credentials else {
+            return Err(self.missing_reader_credentials_error());
+        };
+        let missing_urls = missing
+            .iter()
+            .map(|entry| entry.1.clone())
+            .collect::<Vec<_>>();
+        let markdowns = self
+            .reader
+            .read_markdown_many(&missing_urls, reader_credentials)
+            .await?;
+        if markdowns.len() != missing.len() {
+            return Err(AppError::internal(
+                "TinyFish batch response count did not match requested URLs",
+            ));
+        }
+        for ((index, url), markdown) in missing.into_iter().zip(markdowns) {
+            let Some(page) = pages.get_mut(index) else {
+                return Err(AppError::internal("page fetch result index was missing"));
+            };
+            *page = Some(PageContent {
+                url,
+                source: PageSource::Reader,
+                markdown,
+            });
+        }
+        collect_pages(pages)
     }
-    markdown_targets
+    async fn fetch_direct(&self, url: &str) -> Result<Option<PageContent>> {
+        let parsed =
+            Url::parse(url).map_err(|error| AppError::client(format!("Invalid URL: {error}")))?;
+        self.guard.validate_url(&parsed).await?;
+        let mut attempts = direct_fetch_targets(url, &self.config.direct_fetch)
+            .into_iter()
+            .map(|target| async move {
+                let request_url = target.request_url.clone();
+                let result = fetch_direct_text(
+                    &self.http,
+                    &target,
+                    &self.config.direct_fetch,
+                    &self.config.http,
+                )
+                .await;
+                (request_url, result)
+            })
+            .collect::<FuturesUnordered<_>>();
+        let mut errors = Vec::new();
+        while let Some((request_url, result)) = attempts.next().await {
+            match result {
+                Ok(markdown) => {
+                    return Ok(Some(PageContent {
+                        url: url.to_owned(),
+                        source: PageSource::Direct,
+                        markdown,
+                    }));
+                }
+                Err(error) => errors.push((request_url, error)),
+            }
+        }
+        for (request_url, error) in errors {
+            warn!(
+                "Direct fetch failed for {}: {}",
+                request_url,
+                error.client_message()
+            );
+        }
+        Ok(None)
+    }
+    fn missing_reader_credentials_error(&self) -> AppError {
+        AppError::client(format!(
+            "Missing required header: {} or {}. URLs that cannot be directly fetched require one remote reader API key.",
+            self.config.headers.jina_api_key, self.config.headers.tinyfish_api_key
+        ))
+    }
 }
-fn markdown_accept_target(url: &str) -> DirectFetchTarget {
-    DirectFetchTarget::markdown_accept(url)
-}
-fn markdown_direct_fetch_target(url: &str) -> DirectFetchTarget {
-    let mut target = DirectFetchTarget::text(url, replace_path_suffix(url, ".md"));
-    target.required_content_type = Some("text/markdown".to_owned());
-    target.similarity_probe_url = Some(replace_path_suffix(url, &random_missing_suffix()));
-    target
-}
-fn replace_path_suffix(url: &str, suffix: &str) -> String {
-    let Ok(mut parsed) = Url::parse(url) else {
-        return url.to_owned();
-    };
-    let path = parsed.path().trim_end_matches('/');
-    let next_path = if path.is_empty() {
-        format!("/{}", suffix.trim_start_matches('.'))
-    } else {
-        format!("{path}{suffix}")
-    };
-    parsed.set_path(&next_path);
-    parsed.to_string()
-}
-fn random_missing_suffix() -> String {
-    let value: u128 = rand::random();
-    format!(".{value:032x}")
+fn collect_pages(pages: Vec<Option<PageContent>>) -> Result<Vec<PageContent>> {
+    pages
+        .into_iter()
+        .map(|page| page.ok_or_else(|| AppError::internal("page fetch result was missing")))
+        .collect()
 }

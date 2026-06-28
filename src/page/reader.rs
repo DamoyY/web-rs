@@ -4,6 +4,7 @@ use crate::{
     net::SecureHttpClient,
     page::{jina::JinaReaderClient, tinyfish::TinyFishFetchClient},
 };
+use futures::future::try_join_all;
 #[derive(Clone)]
 pub struct PageReader {
     jina: JinaReaderClient,
@@ -43,6 +44,29 @@ impl PageReader {
         match credentials {
             ReaderCredentials::Jina(api_key) => self.jina.read_markdown(url, api_key).await,
             ReaderCredentials::TinyFish(api_key) => self.tinyfish.read_markdown(url, api_key).await,
+        }
+    }
+    #[expect(
+        clippy::missing_inline_in_public_items,
+        reason = "Batch reader calls perform async HTTP I/O and are not inline candidates."
+    )]
+    #[expect(
+        clippy::pattern_type_mismatch,
+        reason = "Matching borrowed credentials avoids cloning request API keys."
+    )]
+    pub async fn read_markdown_many(
+        &self,
+        urls: &[String],
+        credentials: &ReaderCredentials,
+    ) -> Result<Vec<String>> {
+        match credentials {
+            ReaderCredentials::Jina(api_key) => {
+                let reads = urls.iter().map(|url| self.jina.read_markdown(url, api_key));
+                try_join_all(reads).await
+            }
+            ReaderCredentials::TinyFish(api_key) => {
+                self.tinyfish.read_markdown_many(urls, api_key).await
+            }
         }
     }
 }

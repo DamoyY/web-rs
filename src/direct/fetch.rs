@@ -6,8 +6,9 @@ use crate::{
         target::{DirectFetchTarget, ResponseFormat},
     },
     error::AppError,
-    net::SecureHttpClient,
+    net::{FetchResponse, SecureHttpClient},
 };
+use futures::future::join;
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue, RANGE, USER_AGENT};
 #[expect(
     clippy::missing_inline_in_public_items,
@@ -20,13 +21,8 @@ pub async fn fetch_direct_text(
     http_config: &HttpConfig,
 ) -> Result<String> {
     let headers = request_headers(client, target, direct_config)?;
-    let response = client
-        .get(
-            &target.request_url,
-            headers.clone(),
-            http_config.direct_fetch_timeout_seconds,
-        )
-        .await?;
+    let (response, probe_response) =
+        fetch_target_responses(client, target, headers, http_config).await?;
     let content = extract_content(
         target,
         response.status.as_u16(),
@@ -34,18 +30,40 @@ pub async fn fetch_direct_text(
         &response.body,
         direct_config,
     )?;
-    if target.similarity_probe_url.is_some() && response.status.as_u16() == 200 {
-        reject_if_probe_is_similar(
-            client,
-            target,
-            headers,
-            direct_config,
-            http_config,
-            &content,
-        )
-        .await?;
+    if response.status.as_u16() == 200
+        && let Some(probe_result) = probe_response
+    {
+        let probe_check_response = probe_result?;
+        reject_if_probe_is_similar(target, &probe_check_response, direct_config, &content)?;
     }
     Ok(content)
+}
+async fn fetch_target_responses(
+    client: &SecureHttpClient,
+    target: &DirectFetchTarget,
+    headers: HeaderMap,
+    http_config: &HttpConfig,
+) -> Result<(FetchResponse, Option<Result<FetchResponse>>)> {
+    let Some(probe_url) = target.similarity_probe_url.as_deref() else {
+        return Ok((
+            fetch_response(client, &target.request_url, headers, http_config).await?,
+            None,
+        ));
+    };
+    let main_fetch = fetch_response(client, &target.request_url, headers.clone(), http_config);
+    let probe_fetch = fetch_response(client, probe_url, headers, http_config);
+    let (main_result, probe_result) = join(main_fetch, probe_fetch).await;
+    Ok((main_result?, Some(probe_result)))
+}
+async fn fetch_response(
+    client: &SecureHttpClient,
+    url: &str,
+    headers: HeaderMap,
+    http_config: &HttpConfig,
+) -> Result<FetchResponse> {
+    client
+        .get(url, headers, http_config.direct_fetch_timeout_seconds)
+        .await
 }
 fn request_headers(
     client: &SecureHttpClient,
@@ -64,20 +82,15 @@ fn request_headers(
     headers.insert(USER_AGENT, client.user_agent());
     Ok(headers)
 }
-async fn reject_if_probe_is_similar(
-    client: &SecureHttpClient,
+fn reject_if_probe_is_similar(
     target: &DirectFetchTarget,
-    headers: HeaderMap,
+    response: &FetchResponse,
     direct_config: &DirectFetchConfig,
-    http_config: &HttpConfig,
     content: &str,
 ) -> Result<()> {
     let Some(probe_url) = target.similarity_probe_url.as_deref() else {
         return Ok(());
     };
-    let response = client
-        .get(probe_url, headers, http_config.direct_fetch_timeout_seconds)
-        .await?;
     if response.status.as_u16() != 200 {
         return Ok(());
     }

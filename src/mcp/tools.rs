@@ -3,14 +3,14 @@ use crate::{
     arguments::{find_arguments, open_arguments, search_arguments},
     config::AppConfig,
     error::AppError,
-    models::{FindResponse, OpenResponse, SearchQueryResponse},
-    page::{PageFetcher, TokenChunker, find_in_page, open_page_chunk, reader::ReaderCredentials},
+    mcp::processing::{find_pages, open_pages},
+    models::SearchQueryResponse,
+    page::{PageFetcher, TokenChunker, reader::ReaderCredentials},
     search::ExaSearchClient,
 };
 use alloc::borrow::Cow;
 use axum::http::HeaderMap;
 use fancy_regex::Regex;
-use futures::future::try_join_all;
 use sonic_rs::Value;
 #[cfg(test)]
 mod tests;
@@ -81,38 +81,30 @@ impl ToolService {
     }
     async fn open(&self, arguments: Option<Value>, headers: &HeaderMap) -> Result<Value> {
         let normalized = open_arguments(arguments)?;
-        let mut warnings = normalized.warning.unwrap_or_default();
+        let warnings = normalized.warning.unwrap_or_default();
         let credentials = reader_credentials(
             headers,
             &self.config.headers,
             self.credentials.reader.clone(),
         )?;
-        let fetches = normalized
+        let urls = normalized
             .value
             .requests
             .iter()
-            .map(|request| self.page_fetcher.fetch(&request.url, credentials.as_ref()));
-        let pages = try_join_all(fetches).await?;
-        let mut opened = Vec::with_capacity(pages.len());
-        for (index, (request, page)) in normalized
-            .value
-            .requests
-            .iter()
-            .zip(pages.iter())
-            .enumerate()
-        {
-            opened.push(open_page_chunk(
-                page,
-                request.chunk,
-                index,
-                &self.chunker,
-                &mut warnings,
-            )?);
-        }
-        to_value(&OpenResponse {
-            pages: opened,
-            warning: (!warnings.is_empty()).then_some(warnings),
-        })
+            .map(|request| request.url.clone())
+            .collect::<Vec<_>>();
+        let pages = self
+            .page_fetcher
+            .fetch_many(&urls, credentials.as_ref())
+            .await?;
+        let response = open_pages(
+            &normalized.value.requests,
+            pages,
+            self.chunker.clone(),
+            warnings,
+        )
+        .await?;
+        to_value(&response)
     }
     async fn find(&self, arguments: Option<Value>, headers: &HeaderMap) -> Result<Value> {
         let normalized = find_arguments(arguments)?;
@@ -122,40 +114,28 @@ impl ToolService {
             self.credentials.reader.clone(),
         )?;
         let patterns = compile_patterns(&normalized.value.requests)?;
-        let fetches = normalized
+        let urls = normalized
             .value
             .requests
             .iter()
-            .map(|request| self.page_fetcher.fetch(&request.url, credentials.as_ref()));
-        let pages = try_join_all(fetches).await?;
-        let mut warnings = normalized.warning.unwrap_or_default();
-        let mut found = Vec::with_capacity(pages.len());
-        for (index, ((request, page), pattern)) in normalized
-            .value
-            .requests
-            .iter()
-            .zip(pages.iter())
-            .zip(patterns.iter())
-            .enumerate()
-        {
-            let snippet_tokens = snippet_tokens_for_request(
-                request.snippet_tokens,
-                index,
-                &mut warnings,
-                &self.config,
-            );
-            found.push(find_in_page(
-                page,
-                pattern,
-                snippet_tokens,
-                &self.chunker,
-                &self.config.find,
-            )?);
-        }
-        to_value(&FindResponse {
-            pages: found,
-            warning: (!warnings.is_empty()).then_some(warnings),
-        })
+            .map(|request| request.url.clone())
+            .collect::<Vec<_>>();
+        let pages = self
+            .page_fetcher
+            .fetch_many(&urls, credentials.as_ref())
+            .await?;
+        let warnings = normalized.warning.unwrap_or_default();
+        let response = find_pages(
+            &normalized.value.requests,
+            pages,
+            patterns,
+            self.chunker.clone(),
+            self.config.find.clone(),
+            self.config.chunking.chunk_tokens,
+            warnings,
+        )
+        .await?;
+        to_value(&response)
     }
 }
 fn compile_patterns(requests: &[crate::models::FindRequest]) -> Result<Vec<Regex>> {
@@ -169,24 +149,6 @@ fn compile_patterns(requests: &[crate::models::FindRequest]) -> Result<Vec<Regex
             })
         })
         .collect()
-}
-fn snippet_tokens_for_request(
-    requested: Option<usize>,
-    request_index: usize,
-    warnings: &mut Vec<String>,
-    config: &AppConfig,
-) -> usize {
-    let Some(value) = requested else {
-        return config.find.default_snippet_tokens;
-    };
-    if value <= config.chunking.chunk_tokens {
-        return value;
-    }
-    warnings.push(format!(
-        "\"requests[{request_index}].snippet_tokens\" exceeds chunk_tokens ({}); using {}",
-        config.chunking.chunk_tokens, config.chunking.chunk_tokens
-    ));
-    config.chunking.chunk_tokens
 }
 fn required_api_key<'key>(
     headers: &HeaderMap,

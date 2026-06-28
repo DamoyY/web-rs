@@ -6,6 +6,7 @@ use crate::{
 };
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 #[cfg(test)]
 mod tests;
 #[derive(Clone)]
@@ -46,9 +47,21 @@ impl TinyFishFetchClient {
         reason = "TinyFish reads perform async HTTP I/O and are not inline candidates."
     )]
     pub async fn read_markdown(&self, url: &str, api_key: &str) -> Result<String> {
+        let urls = vec![url.to_owned()];
+        self.read_markdown_many(&urls, api_key)
+            .await?
+            .into_iter()
+            .next()
+            .ok_or_else(|| AppError::internal("TinyFish batch response was empty"))
+    }
+    #[expect(
+        clippy::missing_inline_in_public_items,
+        reason = "TinyFish batch reads perform async HTTP I/O and are not inline candidates."
+    )]
+    pub async fn read_markdown_many(&self, urls: &[String], api_key: &str) -> Result<Vec<String>> {
         let headers = headers(api_key)?;
         let payload = TinyFishPayload {
-            urls: vec![url],
+            urls: urls.iter().map(String::as_str).collect(),
             format: &self.config.tinyfish.format,
             per_url_timeout_ms: self.config.tinyfish.per_url_timeout_ms,
         };
@@ -67,7 +80,7 @@ impl TinyFishFetchClient {
         if response.status.as_u16() >= 400 {
             return Err(http_service_error("TinyFish", response.status.as_u16()));
         }
-        extract_markdown(url, &response.body)
+        extract_markdowns(urls, &response.body)
     }
 }
 fn headers(api_key: &str) -> Result<HeaderMap> {
@@ -79,21 +92,35 @@ fn headers(api_key: &str) -> Result<HeaderMap> {
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     Ok(headers)
 }
-fn extract_markdown(url: &str, body: &[u8]) -> Result<String> {
+fn extract_markdowns(urls: &[String], body: &[u8]) -> Result<Vec<String>> {
     let payload = sonic_rs::from_slice::<TinyFishResponse>(body).map_err(|error| {
         AppError::client(format!(
             "TinyFish returned an unsupported response: {error}"
         ))
     })?;
-    if let Some(result) = payload.results.into_iter().find(|result| result.url == url) {
-        return Ok(result.text);
+    let results = payload
+        .results
+        .into_iter()
+        .map(|result| (result.url, result.text))
+        .collect::<HashMap<_, _>>();
+    let errors = payload
+        .errors
+        .into_iter()
+        .map(|error| (error.url.clone(), error))
+        .collect::<HashMap<_, _>>();
+    let mut markdowns = Vec::with_capacity(urls.len());
+    for url in urls {
+        if let Some(text) = results.get(url) {
+            markdowns.push(text.clone());
+        } else if let Some(error) = errors.get(url) {
+            return Err(tinyfish_fetch_error(error));
+        } else {
+            return Err(AppError::client(format!(
+                "TinyFish returned no content for the requested URL: {url}."
+            )));
+        }
     }
-    if let Some(error) = payload.errors.into_iter().find(|error| error.url == url) {
-        return Err(tinyfish_fetch_error(&error));
-    }
-    Err(AppError::client(
-        "TinyFish returned no content for the requested URL.",
-    ))
+    Ok(markdowns)
 }
 fn tinyfish_fetch_error(error: &TinyFishError) -> AppError {
     let status = error
