@@ -17,7 +17,7 @@ pub struct SecureHttpClient {
     max_redirects: usize,
     user_agent: HeaderValue,
 }
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct FetchResponse {
     pub status: StatusCode,
     pub headers: HeaderMap,

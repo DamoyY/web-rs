@@ -17,10 +17,13 @@ fn markdown_accept_target(url: &str) -> DirectFetchTarget {
 }
 fn markdown_direct_fetch_targets(url: &str) -> Vec<DirectFetchTarget> {
     let probe_url = replace_path_suffix(url, &random_missing_suffix());
-    let mut candidates = vec![replace_path_suffix(url, ".md"), index_markdown_url(url)];
-    if let Some(replaced) = replace_extension_with_markdown(url) {
-        candidates.push(replaced);
+    let replaced = replace_extension_with_markdown(url);
+    let mut candidates = Vec::with_capacity(3);
+    if replaced.is_none() {
+        candidates.push(replace_path_suffix(url, ".md"));
     }
+    candidates.push(index_markdown_url(url));
+    candidates.extend(replaced);
     dedup(candidates)
         .into_iter()
         .map(|candidate| markdown_direct_fetch_target(url, candidate, &probe_url))

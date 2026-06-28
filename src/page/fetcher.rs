@@ -1,12 +1,16 @@
 use crate::{
     Result,
     config::AppConfig,
-    direct::fetch_direct_text,
+    direct::{
+        DirectFetchTarget, SharedProbeFetch, fetch_direct_text, fetch_direct_text_with_probe,
+        shared_probe_fetch,
+    },
     error::AppError,
     net::{SecureHttpClient, SsrfGuard, guard, secure_client_from_config},
     page::reader::{PageReader, ReaderCredentials},
 };
 use futures::{StreamExt as _, future::try_join_all, stream::FuturesUnordered};
+use std::collections::HashMap;
 use targets::direct_fetch_targets;
 use tracing::warn;
 use url::Url;
@@ -126,18 +130,37 @@ impl PageFetcher {
         let parsed =
             Url::parse(url).map_err(|error| AppError::client(format!("Invalid URL: {error}")))?;
         self.guard.validate_url(&parsed).await?;
-        let mut attempts = direct_fetch_targets(url, &self.config.direct_fetch)
+        let targets = direct_fetch_targets(url, &self.config.direct_fetch);
+        let probes = self.shared_probe_fetches(&targets)?;
+        let mut attempts = targets
             .into_iter()
-            .map(|target| async move {
+            .map(|target| {
                 let request_url = target.request_url.clone();
-                let result = fetch_direct_text(
-                    &self.http,
-                    &target,
-                    &self.config.direct_fetch,
-                    &self.config.http,
-                )
-                .await;
-                (request_url, result)
+                let probe_fetch = target
+                    .similarity_probe_url
+                    .as_ref()
+                    .and_then(|probe_url| probes.get(probe_url).cloned());
+                async move {
+                    let result = if let Some(probe) = probe_fetch {
+                        fetch_direct_text_with_probe(
+                            &self.http,
+                            &target,
+                            &self.config.direct_fetch,
+                            &self.config.http,
+                            probe,
+                        )
+                        .await
+                    } else {
+                        fetch_direct_text(
+                            &self.http,
+                            &target,
+                            &self.config.direct_fetch,
+                            &self.config.http,
+                        )
+                        .await
+                    };
+                    (request_url, result)
+                }
             })
             .collect::<FuturesUnordered<_>>();
         let mut errors = Vec::new();
@@ -161,6 +184,29 @@ impl PageFetcher {
             );
         }
         Ok(None)
+    }
+    fn shared_probe_fetches(
+        &self,
+        targets: &[DirectFetchTarget],
+    ) -> Result<HashMap<String, SharedProbeFetch>> {
+        let mut probes = HashMap::new();
+        for target in targets {
+            let Some(probe_url) = target.similarity_probe_url.as_deref() else {
+                continue;
+            };
+            if probes.contains_key(probe_url) {
+                continue;
+            }
+            let probe = shared_probe_fetch(
+                self.http.clone(),
+                probe_url.to_owned(),
+                target,
+                &self.config.direct_fetch,
+                &self.config.http,
+            )?;
+            probes.insert(probe_url.to_owned(), probe);
+        }
+        Ok(probes)
     }
     fn missing_reader_credentials_error(&self) -> AppError {
         AppError::client(format!(

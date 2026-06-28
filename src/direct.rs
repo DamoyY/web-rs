@@ -10,6 +10,7 @@ mod tests;
 use crate::config::DirectFetchConfig;
 pub type DirectFetchTarget = target::DirectFetchTarget;
 pub type ResponseFormat = target::ResponseFormat;
+pub type SharedProbeFetch = fetch::SharedProbeFetch;
 #[inline]
 #[must_use]
 pub fn resolve_direct_fetch_target(
@@ -51,6 +52,30 @@ pub async fn fetch_direct_text(
     http_config: &crate::config::HttpConfig,
 ) -> crate::Result<String> {
     fetch::fetch_direct_text(client, target, direct_config, http_config).await
+}
+#[expect(
+    clippy::missing_inline_in_public_items,
+    reason = "The async direct fetch facade performs HTTP I/O and is not an inline candidate."
+)]
+pub async fn fetch_direct_text_with_probe(
+    client: &crate::net::SecureHttpClient,
+    target: &DirectFetchTarget,
+    direct_config: &crate::config::DirectFetchConfig,
+    http_config: &crate::config::HttpConfig,
+    probe_fetch: SharedProbeFetch,
+) -> crate::Result<String> {
+    fetch::fetch_direct_text_with_probe(client, target, direct_config, http_config, probe_fetch)
+        .await
+}
+#[inline]
+pub fn shared_probe_fetch(
+    client: crate::net::SecureHttpClient,
+    probe_url: String,
+    target: &DirectFetchTarget,
+    direct_config: &crate::config::DirectFetchConfig,
+    http_config: &crate::config::HttpConfig,
+) -> crate::Result<SharedProbeFetch> {
+    fetch::shared_probe_fetch(client, probe_url, target, direct_config, http_config)
 }
 fn microsoft_learn_markdown_url(parsed: &url::Url) -> String {
     let mut pairs: Vec<(String, String)> = parsed

@@ -1,5 +1,5 @@
 use thiserror::Error;
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 #[expect(
     clippy::exhaustive_enums,
     reason = "Application error variants are closed and keep the AppError API explicit."

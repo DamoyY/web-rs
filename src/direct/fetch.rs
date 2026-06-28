@@ -8,8 +8,9 @@ use crate::{
     error::AppError,
     net::{FetchResponse, SecureHttpClient},
 };
-use futures::future::join;
+use futures::future::{BoxFuture, FutureExt as _, Shared, join};
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue, RANGE, USER_AGENT};
+pub type SharedProbeFetch = Shared<BoxFuture<'static, Result<FetchResponse>>>;
 #[expect(
     clippy::missing_inline_in_public_items,
     reason = "The public direct fetch entrypoint performs HTTP I/O and keeps protocol terminology."
@@ -23,6 +24,47 @@ pub async fn fetch_direct_text(
     let headers = request_headers(client, target, direct_config)?;
     let (response, probe_response) =
         fetch_target_responses(client, target, headers, http_config).await?;
+    extract_direct_content(target, &response, probe_response, direct_config)
+}
+#[expect(
+    clippy::missing_inline_in_public_items,
+    reason = "The public direct fetch entrypoint performs HTTP I/O and keeps protocol terminology."
+)]
+pub async fn fetch_direct_text_with_probe(
+    client: &SecureHttpClient,
+    target: &DirectFetchTarget,
+    direct_config: &DirectFetchConfig,
+    http_config: &HttpConfig,
+    probe_fetch: SharedProbeFetch,
+) -> Result<String> {
+    let headers = request_headers(client, target, direct_config)?;
+    let main_fetch = fetch_response(client, &target.request_url, headers, http_config);
+    let (response_result, probe_result) = join(main_fetch, probe_fetch).await;
+    let response = response_result?;
+    extract_direct_content(target, &response, Some(probe_result), direct_config)
+}
+#[inline]
+pub fn shared_probe_fetch(
+    client: SecureHttpClient,
+    probe_url: String,
+    target: &DirectFetchTarget,
+    direct_config: &DirectFetchConfig,
+    http_config: &HttpConfig,
+) -> Result<SharedProbeFetch> {
+    let headers = request_headers(&client, target, direct_config)?;
+    let timeout_seconds = http_config.direct_fetch_timeout_seconds;
+    Ok(
+        async move { client.get(&probe_url, headers, timeout_seconds).await }
+            .boxed()
+            .shared(),
+    )
+}
+fn extract_direct_content(
+    target: &DirectFetchTarget,
+    response: &FetchResponse,
+    probe_response: Option<Result<FetchResponse>>,
+    direct_config: &DirectFetchConfig,
+) -> Result<String> {
     let content = extract_content(
         target,
         response.status.as_u16(),
