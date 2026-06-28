@@ -25,9 +25,6 @@ impl Cli {
     #[inline]
     pub fn runtime_options(self) -> crate::Result<RuntimeOptions> {
         let credentials = self.credentials()?;
-        if credentials.exa_api_key.is_none() {
-            return Err(AppError::config("--exa-api-key is required for stdio MCP."));
-        }
         Ok(RuntimeOptions { credentials })
     }
     fn credentials(&self) -> crate::Result<ToolCredentials> {

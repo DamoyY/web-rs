@@ -1,4 +1,4 @@
-use super::reader_credentials;
+use super::{reader_credentials, required_api_key};
 use crate::{Result, config, error::AppError, page::reader::ReaderCredentials};
 use axum::http::{
     HeaderMap, HeaderValue,
@@ -53,6 +53,16 @@ fn reader_credentials_uses_fallback_without_reader_headers() {
         .unwrap_or_else(|error| panic!("{error}")),
         Some(ReaderCredentials::Jina("jina-key".to_owned()))
     );
+}
+#[test]
+fn missing_exa_api_key_is_reported_when_tool_is_called() {
+    let config = config::load_embedded().unwrap_or_else(|error| panic!("{error}"));
+    let headers = HeaderMap::new();
+    let error = required_api_key(&headers, &config.headers.exa_api_key, None)
+        .unwrap_err()
+        .client_message();
+    assert!(error.contains("Missing required header"));
+    assert!(error.contains(&config.headers.exa_api_key));
 }
 fn header_name(value: &str) -> core::result::Result<HeaderName, InvalidHeaderName> {
     HeaderName::from_bytes(value.as_bytes())
