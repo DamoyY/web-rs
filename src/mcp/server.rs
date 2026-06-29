@@ -8,9 +8,8 @@ use axum::http::HeaderMap;
 use rmcp::{
     ErrorData as McpError, ServerHandler,
     model::{
-        CallToolRequestParams, CallToolResult, Content, Implementation, JsonObject,
-        ListToolsResult, PaginatedRequestParams, ProtocolVersion, ServerCapabilities, ServerInfo,
-        Tool, ToolsCapability,
+        CallToolRequestParams, CallToolResult, Implementation, JsonObject, ListToolsResult,
+        PaginatedRequestParams, ProtocolVersion, ServerCapabilities, ServerInfo, Tool,
     },
     service::{MaybeSendFuture, RequestContext, RoleServer},
 };
@@ -67,11 +66,7 @@ impl ServerHandler for ToolService {
     }
 }
 fn server_info(config: &AppConfig) -> ServerInfo {
-    let capabilities = ServerCapabilities::builder()
-        .enable_tools_with(ToolsCapability {
-            list_changed: Some(false),
-        })
-        .build();
+    let capabilities = ServerCapabilities::builder().enable_tools().build();
     ServerInfo::new(capabilities)
         .with_server_info(Implementation::new(config.server.name.clone(), VERSION))
         .with_protocol_version(protocol_version(&config.server.protocol_version))
@@ -98,18 +93,13 @@ fn sonic_arguments(arguments: Option<JsonObject>) -> Result<Option<Value>, McpEr
         })
 }
 fn structured_result(structured: &Value) -> Result<CallToolResult, McpError> {
-    let text = sonic_rs::to_string_pretty(structured).map_err(|error| {
-        McpError::internal_error(format!("failed to render result: {error}"), None)
-    })?;
     let bytes = sonic_rs::to_vec(structured).map_err(|error| {
         McpError::internal_error(format!("failed to encode result: {error}"), None)
     })?;
     let json = rmcp::serde_json::from_slice(&bytes).map_err(|error| {
         McpError::internal_error(format!("failed to bridge result: {error}"), None)
     })?;
-    let mut result = CallToolResult::success(vec![Content::text(text)]);
-    result.structured_content = Some(json);
-    Ok(result)
+    Ok(CallToolResult::structured(json))
 }
 fn to_mcp_error(error: AppError) -> McpError {
     match error {
